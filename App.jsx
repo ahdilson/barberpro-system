@@ -373,8 +373,19 @@ export default function App() {
     setSettingsSaved(true);
   };
 
-  const handleShopLogo = (file) => {
+  const handleShopLogo = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
+    if (supabase && establishmentId) {
+      const extension = file.type.split('/')[1] || 'png';
+      const path = `${establishmentId}/logo-${Date.now()}.${extension}`;
+      const { error } = await supabase.storage.from('establishment-assets').upload(path, file, { upsert: true, contentType: file.type });
+      if (!error) {
+        const { data } = supabase.storage.from('establishment-assets').getPublicUrl(path);
+        handleSettingsChange('logo', data.publicUrl);
+        return;
+      }
+      alert('Não foi possível enviar a logo para o armazenamento.');
+    }
     const reader = new FileReader();
     reader.onload = () => handleSettingsChange('logo', reader.result);
     reader.readAsDataURL(file);
