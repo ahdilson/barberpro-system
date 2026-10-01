@@ -375,7 +375,7 @@ export default function App() {
       }
     }
     if (supabase && targetEstablishmentId) {
-      const { error } = await supabase.from('establishments').update({
+      const { data: savedEstablishment, error } = await supabase.from('establishments').update({
         name: shopSettings.name,
         business_type: shopSettings.businessType,
         description: shopSettings.description,
@@ -391,8 +391,9 @@ export default function App() {
         reminder_enabled: shopSettings.reminderEnabled,
         online_booking_enabled: shopSettings.onlineBookingEnabled,
         updated_at: new Date().toISOString()
-      }).eq('id', targetEstablishmentId);
+      }).eq('id', targetEstablishmentId).select('*').single();
       if (error) { alert(`Não foi possível salvar as configurações no banco: ${error.message}`); return; }
+      if (savedEstablishment) setShopSettings(current => ({ ...current, name: savedEstablishment.name, businessType: savedEstablishment.business_type, description: savedEstablishment.description, phone: savedEstablishment.phone, address: savedEstablishment.address, instagram: savedEstablishment.instagram_url, locationUrl: savedEstablishment.location_url, primaryColor: savedEstablishment.primary_color, whatsapp: savedEstablishment.whatsapp, confirmationMessage: savedEstablishment.confirmation_message, reminderMessage: savedEstablishment.reminder_message, reminderMinutes: savedEstablishment.reminder_minutes, reminderEnabled: savedEstablishment.reminder_enabled, onlineBookingEnabled: savedEstablishment.online_booking_enabled }));
     } else if (supabase) {
       alert('Não foi possível identificar o estabelecimento. Saia e entre novamente.');
       return;
