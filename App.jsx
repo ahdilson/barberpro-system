@@ -235,8 +235,14 @@ export default function App() {
     }
   };
 
+  const saveClientToCloud = async (name, phone) => {
+    if (!supabase || !establishmentId) return;
+    const { error } = await supabase.from('clients').upsert({ establishment_id: establishmentId, name, phone }, { onConflict: 'establishment_id,phone' });
+    if (error) console.error('Falha ao salvar cliente:', error.message);
+  };
+
   // Handle Client Booking
-  const handleCreateAppointment = (e) => {
+  const handleCreateAppointment = async (e) => {
     e.preventDefault();
     if (!clientName || !clientPhone) return;
 
@@ -255,7 +261,8 @@ export default function App() {
       status: 'confirmado'
     };
 
-    setAppointments([...appointments, newAppointment]);
+    await saveClientToCloud(clientName, clientPhone);
+    setAppointments(current => [...current, newAppointment]);
     openWhatsAppMessage(newAppointment, 'confirmed');
     setBookingSuccess(true);
     setTimeout(() => {
@@ -360,7 +367,7 @@ export default function App() {
     ));
   };
 
-  const handleCreateAdminAppointment = (e) => {
+  const handleCreateAdminAppointment = async (e) => {
     e.preventDefault();
     const serviceObj = services.find(s => s.id === adminBooking.serviceId);
     const duration = serviceObj?.duration || 30;
@@ -370,7 +377,7 @@ export default function App() {
       return;
     }
 
-    setAppointments(current => [...current, {
+    const newAppointment = {
       id: Date.now().toString(),
       clientName: adminBooking.clientName,
       clientPhone: adminBooking.clientPhone,
@@ -382,7 +389,9 @@ export default function App() {
       price: serviceObj?.price || 0,
       paymentMethod: adminBooking.paymentMethod,
       status: 'confirmado'
-    }]);
+    };
+    await saveClientToCloud(newAppointment.clientName, newAppointment.clientPhone);
+    setAppointments(current => [...current, newAppointment]);
     openWhatsAppMessage({ ...adminBooking, ...{
       clientName: adminBooking.clientName,
       clientPhone: adminBooking.clientPhone,
