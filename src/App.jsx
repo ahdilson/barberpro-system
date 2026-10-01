@@ -8,6 +8,7 @@ import {
 
 export default function App() {
   const [supabaseStatus, setSupabaseStatus] = useState(isSupabaseConfigured ? 'conectando' : 'nao-configurado');
+  const [establishmentId, setEstablishmentId] = useState(null);
   // Mode Selection: 'client' or 'admin'
   const [activeTab, setActiveTab] = useState('client');
   const [clientSubTab, setClientSubTab] = useState('book'); // 'book' or 'my-bookings'
@@ -136,6 +137,27 @@ export default function App() {
         setSupabaseStatus(error ? 'erro' : 'conectado');
       });
 
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    let mounted = true;
+    const loadCloudData = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', session.user.id).maybeSingle();
+      if (!profile?.establishment_id || !mounted) return;
+      setEstablishmentId(profile.establishment_id);
+      const [{ data: establishment }, { data: cloudServices }] = await Promise.all([
+        supabase.from('establishments').select('*').eq('id', profile.establishment_id).single(),
+        supabase.from('services').select('*').eq('establishment_id', profile.establishment_id).eq('active', true).order('created_at')
+      ]);
+      if (!mounted) return;
+      if (establishment) setShopSettings(current => ({ ...current, name: establishment.name, businessType: establishment.business_type, description: establishment.description, logo: establishment.logo_url || '', phone: establishment.phone, address: establishment.address, instagram: establishment.instagram_url, locationUrl: establishment.location_url, primaryColor: establishment.primary_color, whatsapp: establishment.whatsapp, confirmationMessage: establishment.confirmation_message, reminderMessage: establishment.reminder_message, reminderMinutes: establishment.reminder_minutes, reminderEnabled: establishment.reminder_enabled, onlineBookingEnabled: establishment.online_booking_enabled }));
+      if (cloudServices?.length) setServices(cloudServices.map(service => ({ id: service.id, name: service.name, description: service.description, price: Number(service.price), duration: service.duration_minutes, category: service.category })));
+    };
+    loadCloudData();
     return () => { mounted = false; };
   }, []);
 
