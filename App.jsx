@@ -151,8 +151,8 @@ export default function App() {
         const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', session.user.id).maybeSingle();
         targetEstablishmentId = profile?.establishment_id || null;
       } else {
-        const { data: publicEstablishment } = await supabase.from('establishments').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
-        targetEstablishmentId = publicEstablishment?.id || null;
+        const { data: publicEstablishments } = await supabase.from('establishments').select('id').limit(1);
+        targetEstablishmentId = publicEstablishments?.[0]?.id || null;
       }
       if (!targetEstablishmentId || !mounted) return;
       setEstablishmentId(targetEstablishmentId);
