@@ -348,8 +348,28 @@ export default function App() {
     setSettingsSaved(false);
   };
 
-  const saveShopSettings = (e) => {
+  const saveShopSettings = async (e) => {
     e.preventDefault();
+    if (supabase && establishmentId) {
+      const { error } = await supabase.from('establishments').update({
+        name: shopSettings.name,
+        business_type: shopSettings.businessType,
+        description: shopSettings.description,
+        phone: shopSettings.phone,
+        address: shopSettings.address,
+        instagram_url: shopSettings.instagram,
+        location_url: shopSettings.locationUrl,
+        primary_color: shopSettings.primaryColor,
+        whatsapp: shopSettings.whatsapp,
+        confirmation_message: shopSettings.confirmationMessage,
+        reminder_message: shopSettings.reminderMessage,
+        reminder_minutes: shopSettings.reminderMinutes,
+        reminder_enabled: shopSettings.reminderEnabled,
+        online_booking_enabled: shopSettings.onlineBookingEnabled,
+        updated_at: new Date().toISOString()
+      }).eq('id', establishmentId);
+      if (error) { alert('Não foi possível salvar as configurações no banco.'); return; }
+    }
     setSettingsSaved(true);
   };
 
