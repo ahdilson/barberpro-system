@@ -21,6 +21,7 @@ export default function App() {
     reminderEnabled: true, onlineBookingEnabled: true
   });
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState('');
   const [platformAuthenticated, setPlatformAuthenticated] = useState(false);
   const [platformUsername, setPlatformUsername] = useState('');
   const [platformPassword, setPlatformPassword] = useState('');
@@ -265,6 +266,7 @@ export default function App() {
     setAppointments(current => [...current, newAppointment]);
     openWhatsAppMessage(newAppointment, 'confirmed');
     setBookingSuccess(true);
+    flashAction('Agendamento concluído');
     setTimeout(() => {
       setBookingSuccess(false);
       setClientName('');
@@ -348,6 +350,11 @@ export default function App() {
     setSettingsSaved(false);
   };
 
+  const flashAction = (message) => {
+    setActionFeedback(message);
+    window.setTimeout(() => setActionFeedback(''), 2500);
+  };
+
   const saveShopSettings = async (e) => {
     e.preventDefault();
     if (supabase && establishmentId) {
@@ -371,6 +378,7 @@ export default function App() {
       if (error) { alert('Não foi possível salvar as configurações no banco.'); return; }
     }
     setSettingsSaved(true);
+    flashAction('Configurações concluídas');
   };
 
   const handleShopLogo = async (file) => {
@@ -434,6 +442,7 @@ export default function App() {
     setAdminBooking({ ...adminBooking, clientName: '', clientPhone: '' });
     setAdminBookingOpen(false);
     setAdminBookingError('');
+    flashAction('Agendamento concluído');
   };
 
   // Barber Actions
@@ -451,6 +460,7 @@ export default function App() {
     setNewBarberName('');
     setNewBarberRole('');
     setNewBarberPhoto('');
+    flashAction('Barbeiro cadastrado');
   };
 
   const handleBarberPhoto = (file, onLoad) => {
@@ -464,6 +474,7 @@ export default function App() {
     e.preventDefault();
     setBarbers(barbers.map(b => b.id === editingBarber.id ? editingBarber : b));
     setEditingBarber(null);
+    flashAction('Barbeiro atualizado');
   };
 
   // Service Actions
@@ -487,6 +498,7 @@ export default function App() {
     setNewServiceName('');
     setNewServicePrice('');
     setNewServiceDescription('');
+    flashAction('Serviço cadastrado');
   };
 
   const handleUpdateService = async (e) => {
@@ -497,6 +509,7 @@ export default function App() {
     }
     setServices(current => current.map(s => s.id === editingService.id ? editingService : s));
     setEditingService(null);
+    flashAction('Serviço atualizado');
   };
 
   const handleDeleteService = async (serviceId) => {
@@ -505,6 +518,7 @@ export default function App() {
       if (error) { alert('Não foi possível remover o serviço do banco.'); return; }
     }
     setServices(current => current.filter(item => item.id !== serviceId));
+    flashAction('Serviço removido');
   };
 
   // Time Block Actions
@@ -559,6 +573,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
+      {actionFeedback && <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-300 shadow-lg"><CheckCircle2 className="w-4 h-4" />{actionFeedback}</div>}
       {/* Top Header Navigation */}
       <header className="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
@@ -1379,7 +1394,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"><p className="text-xs uppercase font-semibold text-zinc-500 mb-3">Prévia da identidade pública</p><div className="rounded-lg p-5 border flex items-center gap-4" style={{ borderColor: shopSettings.primaryColor, backgroundColor: `${shopSettings.primaryColor}15` }}>{shopSettings.logo && <img src={shopSettings.logo} alt="Logo" className="w-16 h-16 rounded-xl object-cover" />}<div><p className="text-xs text-zinc-400">{shopSettings.businessType}</p><p className="font-bold text-lg" style={{ color: shopSettings.primaryColor }}>{shopSettings.name || 'Seu estabelecimento'}</p><p className="text-sm text-zinc-300 mt-1">{shopSettings.description}</p><p className="text-xs text-zinc-400 mt-1">{shopSettings.address} • {shopSettings.phone}</p></div></div></div>
-                <div className="flex justify-end"><button type="submit" className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold px-5 py-2.5 rounded-lg text-sm flex items-center gap-2"><Save className="w-4 h-4" /> Salvar configurações</button></div>
+                <div className="flex justify-end"><button type="submit" className={`font-bold px-5 py-2.5 rounded-lg text-sm flex items-center gap-2 transition ${actionFeedback === 'Configurações concluídas' ? 'bg-emerald-500 text-white' : 'bg-amber-500 hover:bg-amber-400 text-zinc-950'}`}><CheckCircle2 className="w-4 h-4" /> {actionFeedback === 'Configurações concluídas' ? 'Concluído' : 'Salvar configurações'}</button></div>
               </form>
             )}
 
