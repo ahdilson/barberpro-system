@@ -248,8 +248,19 @@ export default function App() {
     setAdminBookingError('');
   };
 
-  const handleAdminLogin = (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
+    if (supabase && adminUsername.includes('@')) {
+      const { error } = await supabase.auth.signInWithPassword({ email: adminUsername.trim(), password: adminPassword });
+      if (!error) {
+        setAdminRole('admin');
+        setAdminAuthenticated(true);
+        setAdminLoginError('');
+        return;
+      }
+      setAdminLoginError('E-mail ou senha inválidos.');
+      return;
+    }
     if (adminUsername === 'admin' && adminPassword === adminPasswordCredential) {
       setAdminAuthenticated(true);
       setAdminRole('admin');
