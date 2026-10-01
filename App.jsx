@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { 
   Calendar, Clock, Scissors, User, DollarSign, 
   TrendingUp, Lock, Plus, Trash2, CheckCircle2, 
@@ -427,7 +427,7 @@ export default function App() {
   };
 
   // Service Actions
-  const handleAddService = (e) => {
+  const handleAddService = async (e) => {
     e.preventDefault();
     if (!newServiceName || !newServicePrice) return;
     const newServ = {
@@ -438,16 +438,33 @@ export default function App() {
       category: newServiceCategory,
       description: newServiceDescription
     };
-    setServices([...services, newServ]);
+    if (supabase && establishmentId) {
+      const { data, error } = await supabase.from('services').insert({ establishment_id: establishmentId, name: newServ.name, description: newServ.description, price: newServ.price, duration_minutes: newServ.duration, category: newServ.category }).select().single();
+      if (error) { alert('Não foi possível salvar o serviço no banco.'); return; }
+      newServ.id = data.id;
+    }
+    setServices(current => [...current, newServ]);
     setNewServiceName('');
     setNewServicePrice('');
     setNewServiceDescription('');
   };
 
-  const handleUpdateService = (e) => {
+  const handleUpdateService = async (e) => {
     e.preventDefault();
-    setServices(services.map(s => s.id === editingService.id ? editingService : s));
+    if (supabase && establishmentId) {
+      const { error } = await supabase.from('services').update({ name: editingService.name, description: editingService.description, price: editingService.price, duration_minutes: editingService.duration, category: editingService.category }).eq('id', editingService.id).eq('establishment_id', establishmentId);
+      if (error) { alert('Não foi possível atualizar o serviço no banco.'); return; }
+    }
+    setServices(current => current.map(s => s.id === editingService.id ? editingService : s));
     setEditingService(null);
+  };
+
+  const handleDeleteService = async (serviceId) => {
+    if (supabase && establishmentId) {
+      const { error } = await supabase.from('services').update({ active: false }).eq('id', serviceId).eq('establishment_id', establishmentId);
+      if (error) { alert('Não foi possível remover o serviço do banco.'); return; }
+    }
+    setServices(current => current.filter(item => item.id !== serviceId));
   };
 
   // Time Block Actions
@@ -1277,7 +1294,7 @@ export default function App() {
                             <Edit3 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => setServices(services.filter(item => item.id !== s.id))}
+                            onClick={() => handleDeleteService(s.id)}
                             className="text-red-400 hover:text-red-300 p-1"
                             title="Excluir Serviço"
                           >
