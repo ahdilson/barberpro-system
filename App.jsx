@@ -359,7 +359,16 @@ export default function App() {
 
   const saveShopSettings = async (e) => {
     e.preventDefault();
-    if (supabase && establishmentId) {
+    let targetEstablishmentId = establishmentId;
+    if (supabase && !targetEstablishmentId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('establishment_id').eq('id', user.id).maybeSingle();
+        targetEstablishmentId = profile?.establishment_id || null;
+        if (targetEstablishmentId) setEstablishmentId(targetEstablishmentId);
+      }
+    }
+    if (supabase && targetEstablishmentId) {
       const { error } = await supabase.from('establishments').update({
         name: shopSettings.name,
         business_type: shopSettings.businessType,
@@ -376,8 +385,11 @@ export default function App() {
         reminder_enabled: shopSettings.reminderEnabled,
         online_booking_enabled: shopSettings.onlineBookingEnabled,
         updated_at: new Date().toISOString()
-      }).eq('id', establishmentId);
-      if (error) { alert('Não foi possível salvar as configurações no banco.'); return; }
+      }).eq('id', targetEstablishmentId);
+      if (error) { alert(`Não foi possível salvar as configurações no banco: ${error.message}`); return; }
+    } else if (supabase) {
+      alert('Não foi possível identificar o estabelecimento. Saia e entre novamente.');
+      return;
     }
     setSettingsSaved(true);
     flashAction('Configurações concluídas');
