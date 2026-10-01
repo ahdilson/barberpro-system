@@ -628,7 +628,7 @@ export default function App() {
               {shopSettings.logo ? <img src={shopSettings.logo} alt="Logo" className="w-full h-full object-cover" /> : <Scissors className="w-6 h-6" />}
             </div>
             <div>
-              <h1 className="font-bold text-lg text-amber-500">{shopSettings.name}</h1>
+              <h1 className="font-bold text-lg text-amber-500">SeuHorario</h1>
               <p className="text-xs text-zinc-400">{shopSettings.businessType} • Gestão & Agendamento</p>
             </div>
           </div>
