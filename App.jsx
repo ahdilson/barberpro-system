@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { 
   Calendar, Clock, Scissors, User, DollarSign, 
   TrendingUp, Lock, Plus, Trash2, CheckCircle2, 
@@ -6,6 +7,8 @@ import {
 } from 'lucide-react';
 
 export default function App() {
+  const [supabaseStatus, setSupabaseStatus] = useState(isSupabaseConfigured ? 'conectando' : 'nao-configurado');
+  const [establishmentId, setEstablishmentId] = useState(null);
   // Mode Selection: 'client' or 'admin'
   const [activeTab, setActiveTab] = useState('client');
   const [clientSubTab, setClientSubTab] = useState('book'); // 'book' or 'my-bookings'
@@ -124,6 +127,40 @@ export default function App() {
   const [blockReason, setBlockReason] = useState('Horário de Almoço');
   const [blockIsRecurring, setBlockIsRecurring] = useState(true);
 
+  useEffect(() => {
+    let mounted = true;
+    if (!supabase) return undefined;
+
+    supabase.from('establishments').select('id').limit(1)
+      .then(({ error }) => {
+        if (!mounted) return;
+        setSupabaseStatus(error ? 'erro' : 'conectado');
+      });
+
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    let mounted = true;
+    const loadCloudData = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', session.user.id).maybeSingle();
+      if (!profile?.establishment_id || !mounted) return;
+      setEstablishmentId(profile.establishment_id);
+      const [{ data: establishment }, { data: cloudServices }] = await Promise.all([
+        supabase.from('establishments').select('*').eq('id', profile.establishment_id).single(),
+        supabase.from('services').select('*').eq('establishment_id', profile.establishment_id).eq('active', true).order('created_at')
+      ]);
+      if (!mounted) return;
+      if (establishment) setShopSettings(current => ({ ...current, name: establishment.name, businessType: establishment.business_type, description: establishment.description, logo: establishment.logo_url || '', phone: establishment.phone, address: establishment.address, instagram: establishment.instagram_url, locationUrl: establishment.location_url, primaryColor: establishment.primary_color, whatsapp: establishment.whatsapp, confirmationMessage: establishment.confirmation_message, reminderMessage: establishment.reminder_message, reminderMinutes: establishment.reminder_minutes, reminderEnabled: establishment.reminder_enabled, onlineBookingEnabled: establishment.online_booking_enabled }));
+      if (cloudServices?.length) setServices(cloudServices.map(service => ({ id: service.id, name: service.name, description: service.description, price: Number(service.price), duration: service.duration_minutes, category: service.category })));
+    };
+    loadCloudData();
+    return () => { mounted = false; };
+  }, []);
+
   // Available Time Slots (30 min increments)
   const timeSlots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'];
 
@@ -233,8 +270,19 @@ export default function App() {
     setAdminBookingError('');
   };
 
-  const handleAdminLogin = (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
+    if (supabase && adminUsername.includes('@')) {
+      const { error } = await supabase.auth.signInWithPassword({ email: adminUsername.trim(), password: adminPassword });
+      if (!error) {
+        setAdminRole('admin');
+        setAdminAuthenticated(true);
+        setAdminLoginError('');
+        return;
+      }
+      setAdminLoginError('E-mail ou senha inválidos.');
+      return;
+    }
     if (adminUsername === 'admin' && adminPassword === adminPasswordCredential) {
       setAdminAuthenticated(true);
       setAdminRole('admin');
