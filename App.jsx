@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Calendar, Clock, Scissors, User, DollarSign, 
   TrendingUp, Lock, Plus, Trash2, CheckCircle2, 
-  Settings, AlertCircle, CalendarX, ChevronRight, Shield, Edit3, Repeat, Save, X, Search, Ban, Building2, Power
+  Settings, AlertCircle, CalendarX, ChevronRight, Shield, Edit3, Repeat, Save, X, Search, Ban, Building2, Power, MessageCircle, Instagram, MapPin
 } from 'lucide-react';
 
 export default function App() {
@@ -11,7 +11,7 @@ export default function App() {
   const [clientSubTab, setClientSubTab] = useState('book'); // 'book' or 'my-bookings'
   const [adminSection, setAdminSection] = useState('overview');
   const [shopSettings, setShopSettings] = useState({
-    name: 'BarberPro System', phone: '(49) 99999-9999', address: 'Rua Principal, 100',
+    name: 'BarberPro System', description: 'Atendimento personalizado para cuidar do seu estilo.', businessType: 'Barbearia', logo: '', phone: '(49) 99999-9999', address: 'Rua Principal, 100', instagram: '', locationUrl: '',
     primaryColor: '#f59e0b', whatsapp: '49999999999', confirmationMessage: 'Olá, {cliente}! Seu horário foi confirmado.',
     reminderMessage: 'Olá, {cliente}! Lembrete: seu horário é amanhã às {horario}.', reminderMinutes: 1440,
     metaPhoneNumberId: '', metaBusinessAccountId: '', metaAccessToken: '',
@@ -298,6 +298,13 @@ export default function App() {
     setSettingsSaved(true);
   };
 
+  const handleShopLogo = (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => handleSettingsChange('logo', reader.result);
+    reader.readAsDataURL(file);
+  };
+
   const toggleBarbershopAccess = (id) => {
     setBarbershops(current => current.map(shop => shop.id === id
       ? { ...shop, status: shop.status === 'ativo' ? 'suspenso' : 'ativo', payment: shop.status === 'ativo' ? 'Acesso suspenso' : 'Regularizado' }
@@ -451,12 +458,12 @@ export default function App() {
       <header className="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-amber-500/10 rounded-lg border border-amber-500/20 text-amber-500">
-              <Scissors className="w-6 h-6" />
+            <div className="w-10 h-10 bg-amber-500/10 rounded-lg border border-amber-500/20 text-amber-500 flex items-center justify-center overflow-hidden">
+              {shopSettings.logo ? <img src={shopSettings.logo} alt="Logo" className="w-full h-full object-cover" /> : <Scissors className="w-6 h-6" />}
             </div>
             <div>
-              <h1 className="font-bold text-lg text-amber-500">BarberPro System</h1>
-              <p className="text-xs text-zinc-400">Gestão & Agendamento</p>
+              <h1 className="font-bold text-lg text-amber-500">{shopSettings.name}</h1>
+              <p className="text-xs text-zinc-400">{shopSettings.businessType} • Gestão & Agendamento</p>
             </div>
           </div>
 
@@ -486,6 +493,7 @@ export default function App() {
         {/* ==================== CLIENT AGENDAMENTO VIEW ==================== */}
         {activeTab === 'client' && (
           <div className="max-w-3xl mx-auto space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-5"> <div className="flex items-center gap-4">{shopSettings.logo && <img src={shopSettings.logo} alt={shopSettings.name} className="w-16 h-16 rounded-xl object-cover" />}<div><p className="text-xs uppercase tracking-wider text-amber-500 font-semibold">{shopSettings.businessType}</p><h2 className="text-2xl font-bold text-white">{shopSettings.name}</h2><p className="text-sm text-zinc-400 mt-1">{shopSettings.description}</p></div></div><div className="flex items-center gap-2"><a href={shopSettings.whatsapp ? `https://wa.me/55${shopSettings.whatsapp.replace(/\D/g, '')}` : '#'} target="_blank" rel="noreferrer" title="Chamar no WhatsApp" className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"><MessageCircle className="w-4 h-4" /></a><a href={shopSettings.instagram || '#'} target="_blank" rel="noreferrer" title="Instagram" className="p-2.5 rounded-lg bg-pink-500/10 text-pink-400 border border-pink-500/30 hover:bg-pink-500/20"><Instagram className="w-4 h-4" /></a><a href={shopSettings.locationUrl || '#'} target="_blank" rel="noreferrer" title="Como chegar" className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20"><MapPin className="w-4 h-4" /></a></div></div>
             {/* Sub-navigation for Client */}
             <div className="flex justify-center gap-2 bg-zinc-900 p-1.5 rounded-xl border border-zinc-800 w-max mx-auto">
               <button
@@ -1240,10 +1248,15 @@ export default function App() {
               <form onSubmit={saveShopSettings} className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><h2 className="text-2xl font-bold text-white">Configurações da Barbearia</h2><p className="text-sm text-zinc-400 mt-1">Personalize sua página e os canais de atendimento.</p></div>{settingsSaved && <span className="text-sm text-emerald-400">Configurações salvas</span>}</div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4"><h3 className="font-bold text-white">Dados do estabelecimento</h3>
-                    <label className="block text-xs font-semibold text-zinc-400">Nome da barbearia<input value={shopSettings.name} onChange={e => handleSettingsChange('name', e.target.value)} className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm" /></label>
+                  <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4"><h3 className="font-bold text-white">Identidade do estabelecimento</h3>
+                    <label className="block text-xs font-semibold text-zinc-400">Nome do estabelecimento<input value={shopSettings.name} onChange={e => handleSettingsChange('name', e.target.value)} className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm" /></label>
+                    <label className="block text-xs font-semibold text-zinc-400">Tipo de negócio<select value={shopSettings.businessType} onChange={e => handleSettingsChange('businessType', e.target.value)} className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm"><option>Barbearia</option><option>Salão de beleza</option><option>Espaço de beleza</option><option>Estúdio de estética</option><option>Outro</option></select></label>
+                    <label className="block text-xs font-semibold text-zinc-400">Logo do estabelecimento<div className="flex items-center gap-3 mt-1">{shopSettings.logo ? <img src={shopSettings.logo} alt="Prévia da logo" className="w-16 h-16 rounded-xl object-cover border border-zinc-700" /> : <div className="w-16 h-16 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500">Sem logo</div>}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => handleShopLogo(e.target.files?.[0])} className="w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white" /></div></label>
+                    <label className="block text-xs font-semibold text-zinc-400">Descrição pública<textarea value={shopSettings.description} onChange={e => handleSettingsChange('description', e.target.value)} placeholder="Apresente seu estabelecimento aos clientes" rows="3" className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm resize-none" /></label>
                     <label className="block text-xs font-semibold text-zinc-400">Telefone<input value={shopSettings.phone} onChange={e => handleSettingsChange('phone', e.target.value)} className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm" /></label>
                     <label className="block text-xs font-semibold text-zinc-400">Endereço<input value={shopSettings.address} onChange={e => handleSettingsChange('address', e.target.value)} className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm" /></label>
+                    <label className="block text-xs font-semibold text-zinc-400">Link do Instagram<input type="url" value={shopSettings.instagram} onChange={e => handleSettingsChange('instagram', e.target.value)} placeholder="https://instagram.com/suaempresa" className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm" /></label>
+                    <label className="block text-xs font-semibold text-zinc-400">Link da localização<input type="url" value={shopSettings.locationUrl} onChange={e => handleSettingsChange('locationUrl', e.target.value)} placeholder="Link do Google Maps" className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm" /></label>
                     <label className="block text-xs font-semibold text-zinc-400">Cor da página<div className="flex items-center gap-3 mt-1"><input type="color" value={shopSettings.primaryColor} onChange={e => handleSettingsChange('primaryColor', e.target.value)} className="w-12 h-10 bg-zinc-800 border border-zinc-700 rounded-lg p-1" /><span className="text-sm text-zinc-300">{shopSettings.primaryColor}</span></div></label>
                   </div>
                   <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4"><h3 className="font-bold text-white">WhatsApp e atendimento</h3>
@@ -1260,7 +1273,7 @@ export default function App() {
                     <label className="flex items-center justify-between gap-3 text-sm text-zinc-300"><span>Enviar lembrete de horário</span><input type="checkbox" checked={shopSettings.reminderEnabled} onChange={e => handleSettingsChange('reminderEnabled', e.target.checked)} className="accent-amber-500 w-4 h-4" /></label>
                   </div>
                 </div>
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"><p className="text-xs uppercase font-semibold text-zinc-500 mb-3">Prévia da identidade</p><div className="rounded-lg p-5 border" style={{ borderColor: shopSettings.primaryColor, backgroundColor: `${shopSettings.primaryColor}15` }}><p className="font-bold text-lg" style={{ color: shopSettings.primaryColor }}>{shopSettings.name || 'Sua Barbearia'}</p><p className="text-sm text-zinc-400 mt-1">{shopSettings.address} • {shopSettings.phone}</p></div></div>
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"><p className="text-xs uppercase font-semibold text-zinc-500 mb-3">Prévia da identidade pública</p><div className="rounded-lg p-5 border flex items-center gap-4" style={{ borderColor: shopSettings.primaryColor, backgroundColor: `${shopSettings.primaryColor}15` }}>{shopSettings.logo && <img src={shopSettings.logo} alt="Logo" className="w-16 h-16 rounded-xl object-cover" />}<div><p className="text-xs text-zinc-400">{shopSettings.businessType}</p><p className="font-bold text-lg" style={{ color: shopSettings.primaryColor }}>{shopSettings.name || 'Seu estabelecimento'}</p><p className="text-sm text-zinc-300 mt-1">{shopSettings.description}</p><p className="text-xs text-zinc-400 mt-1">{shopSettings.address} • {shopSettings.phone}</p></div></div></div>
                 <div className="flex justify-end"><button type="submit" className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold px-5 py-2.5 rounded-lg text-sm flex items-center gap-2"><Save className="w-4 h-4" /> Salvar configurações</button></div>
               </form>
             )}
