@@ -31,11 +31,8 @@ export default function App() {
   const [platformCurrentPassword, setPlatformCurrentPassword] = useState('');
   const [platformNewPassword, setPlatformNewPassword] = useState('');
   const [platformPasswordMessage, setPlatformPasswordMessage] = useState('');
-  const [barbershops, setBarbershops] = useState([
-    { id: 'shop-1', name: 'Barbearia Central', owner: 'Rafael Oliveira', plan: 'Profissional', status: 'ativo', payment: 'Em dia', nextPayment: '05/10/2026' },
-    { id: 'shop-2', name: 'Corte Nobre', owner: 'André Martins', plan: 'Básico', status: 'ativo', payment: 'Em dia', nextPayment: '12/10/2026' },
-    { id: 'shop-3', name: 'Barba & Estilo', owner: 'Thiago Souza', plan: 'Profissional', status: 'suspenso', payment: 'Inadimplente', nextPayment: '20/09/2026' }
-  ]);
+  const [barbershops, setBarbershops] = useState([]);
+  const [platformDataLoading, setPlatformDataLoading] = useState(false);
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [adminRole, setAdminRole] = useState('admin');
   const [loggedBarberId, setLoggedBarberId] = useState(null);
@@ -138,6 +135,19 @@ export default function App() {
         setSupabaseStatus(error ? 'erro' : 'conectado');
       });
 
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    let mounted = true;
+    const loadPlatformData = async () => {
+      setPlatformDataLoading(true);
+      const { data } = await supabase.from('establishments').select('id, name, slug, updated_at').order('name');
+      if (mounted && data) setBarbershops(data.map(shop => ({ id: shop.id, name: shop.name, owner: 'Não informado', plan: 'Não definido', status: 'ativo', payment: 'Não informado', nextPayment: 'Não definido', slug: shop.slug || '' })));
+      if (mounted) setPlatformDataLoading(false);
+    };
+    loadPlatformData();
     return () => { mounted = false; };
   }, []);
 
@@ -323,10 +333,6 @@ export default function App() {
   const handlePlatformLogin = async (e) => {
     e.preventDefault();
     if (platformUsername === 'master' && platformPassword === platformPasswordCredential) {
-      if (supabase) {
-        const { data: cloudEstablishments } = await supabase.from('establishments').select('id, name, slug, updated_at').order('name');
-        if (cloudEstablishments) setBarbershops(cloudEstablishments.map(shop => ({ id: shop.id, name: shop.name, owner: 'Não informado', plan: 'Não definido', status: 'ativo', payment: 'Não informado', nextPayment: 'Não definido', slug: shop.slug || '' })));
-      }
       setPlatformAuthenticated(true);
       setPlatformLoginError('');
       setPlatformPassword('');
@@ -1598,7 +1604,7 @@ export default function App() {
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
                 <h3 className="text-lg font-bold text-white mb-4">Barbearias clientes</h3>
                 <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-zinc-800 text-zinc-400 text-xs uppercase"><tr><th className="py-3 px-4">Barbearia</th><th className="py-3 px-4">Responsável</th><th className="py-3 px-4">Plano</th><th className="py-3 px-4">Pagamento</th><th className="py-3 px-4">Status</th><th className="py-3 px-4 text-right">Ação</th></tr></thead>
-                  <tbody className="divide-y divide-zinc-800">{barbershops.map(shop => <tr key={shop.id} className="hover:bg-zinc-800/30"><td className="py-4 px-4 font-semibold text-white">{shop.name}<span className="block text-xs text-zinc-500 mt-1">Próximo vencimento: {shop.nextPayment}</span></td><td className="py-4 px-4 text-zinc-300">{shop.owner}</td><td className="py-4 px-4 text-zinc-300">{shop.plan}</td><td className={`py-4 px-4 ${shop.payment === 'Em dia' ? 'text-emerald-400' : 'text-red-400'}`}>{shop.payment}</td><td className="py-4 px-4"><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${shop.status === 'ativo' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>{shop.status.toUpperCase()}</span></td><td className="py-4 px-4 text-right"><button onClick={() => toggleBarbershopAccess(shop.id)} className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 ml-auto ${shop.status === 'ativo' ? 'text-red-400 bg-red-500/10 hover:bg-red-500/20' : 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'}`}><Power className="w-3.5 h-3.5" />{shop.status === 'ativo' ? 'Suspender' : 'Reativar'}</button></td></tr>)}</tbody>
+                  <tbody className="divide-y divide-zinc-800">{platformDataLoading ? <tr><td colSpan="6" className="py-10 text-center text-zinc-500">Carregando estabelecimentos...</td></tr> : barbershops.length === 0 ? <tr><td colSpan="6" className="py-10 text-center text-zinc-500">Nenhum estabelecimento cadastrado no banco.</td></tr> : barbershops.map(shop => <tr key={shop.id} className="hover:bg-zinc-800/30"><td className="py-4 px-4 font-semibold text-white">{shop.name}<span className="block text-xs text-zinc-500 mt-1">/{shop.slug || 'sem-link-configurado'}</span></td><td className="py-4 px-4 text-zinc-300">{shop.owner}</td><td className="py-4 px-4 text-zinc-300">{shop.plan}</td><td className="py-4 px-4 text-zinc-500">{shop.payment}</td><td className="py-4 px-4"><span className="text-[10px] px-2 py-1 rounded-full font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">ATIVO</span></td><td className="py-4 px-4 text-right"><button onClick={() => toggleBarbershopAccess(shop.id)} className="px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 ml-auto text-red-400 bg-red-500/10 hover:bg-red-500/20"><Power className="w-3.5 h-3.5" />Suspender</button></td></tr>)}</tbody>
                 </table></div>
               </div>
             </div>
