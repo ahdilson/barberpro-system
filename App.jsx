@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   Calendar, Clock, Scissors, User, DollarSign, 
   TrendingUp, Lock, Plus, Trash2, CheckCircle2, 
@@ -21,6 +21,7 @@ export default function App() {
     reminderEnabled: true, onlineBookingEnabled: true
   });
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState('');
   const [platformAuthenticated, setPlatformAuthenticated] = useState(false);
   const [platformUsername, setPlatformUsername] = useState('');
   const [platformPassword, setPlatformPassword] = useState('');
@@ -145,13 +146,19 @@ export default function App() {
     let mounted = true;
     const loadCloudData = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
-      const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', session.user.id).maybeSingle();
-      if (!profile?.establishment_id || !mounted) return;
-      setEstablishmentId(profile.establishment_id);
+      let targetEstablishmentId = null;
+      if (session?.user) {
+        const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', session.user.id).maybeSingle();
+        targetEstablishmentId = profile?.establishment_id || null;
+      } else {
+        const { data: publicEstablishment } = await supabase.from('establishments').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
+        targetEstablishmentId = publicEstablishment?.id || null;
+      }
+      if (!targetEstablishmentId || !mounted) return;
+      setEstablishmentId(targetEstablishmentId);
       const [{ data: establishment }, { data: cloudServices }] = await Promise.all([
-        supabase.from('establishments').select('*').eq('id', profile.establishment_id).single(),
-        supabase.from('services').select('*').eq('establishment_id', profile.establishment_id).eq('active', true).order('created_at')
+        supabase.from('establishments').select('*').eq('id', targetEstablishmentId).single(),
+        supabase.from('services').select('*').eq('establishment_id', targetEstablishmentId).eq('active', true).order('created_at')
       ]);
       if (!mounted) return;
       if (establishment) setShopSettings(current => ({ ...current, name: establishment.name, businessType: establishment.business_type, description: establishment.description, logo: establishment.logo_url || '', phone: establishment.phone, address: establishment.address, instagram: establishment.instagram_url, locationUrl: establishment.location_url, primaryColor: establishment.primary_color, whatsapp: establishment.whatsapp, confirmationMessage: establishment.confirmation_message, reminderMessage: establishment.reminder_message, reminderMinutes: establishment.reminder_minutes, reminderEnabled: establishment.reminder_enabled, onlineBookingEnabled: establishment.online_booking_enabled }));
@@ -265,6 +272,7 @@ export default function App() {
     setAppointments(current => [...current, newAppointment]);
     openWhatsAppMessage(newAppointment, 'confirmed');
     setBookingSuccess(true);
+    flashAction('Agendamento concluído');
     setTimeout(() => {
       setBookingSuccess(false);
       setClientName('');
@@ -282,6 +290,8 @@ export default function App() {
     if (supabase && adminUsername.includes('@')) {
       const { error } = await supabase.auth.signInWithPassword({ email: adminUsername.trim(), password: adminPassword });
       if (!error) {
+        const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', (await supabase.auth.getUser()).data.user.id).maybeSingle();
+        if (profile?.establishment_id) setEstablishmentId(profile.establishment_id);
         setAdminRole('admin');
         setAdminAuthenticated(true);
         setAdminLoginError('');
@@ -348,13 +358,62 @@ export default function App() {
     setSettingsSaved(false);
   };
 
-  const saveShopSettings = (e) => {
-    e.preventDefault();
-    setSettingsSaved(true);
+  const flashAction = (message) => {
+    setActionFeedback(message);
+    window.setTimeout(() => setActionFeedback(''), 2500);
   };
 
-  const handleShopLogo = (file) => {
+  const saveShopSettings = async (e) => {
+    e.preventDefault();
+    let targetEstablishmentId = establishmentId;
+    if (supabase && !targetEstablishmentId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('establishment_id').eq('id', user.id).maybeSingle();
+        targetEstablishmentId = profile?.establishment_id || null;
+        if (targetEstablishmentId) setEstablishmentId(targetEstablishmentId);
+      }
+    }
+    if (supabase && targetEstablishmentId) {
+      const { error } = await supabase.from('establishments').update({
+        name: shopSettings.name,
+        business_type: shopSettings.businessType,
+        description: shopSettings.description,
+        phone: shopSettings.phone,
+        address: shopSettings.address,
+        instagram_url: shopSettings.instagram,
+        location_url: shopSettings.locationUrl,
+        primary_color: shopSettings.primaryColor,
+        whatsapp: shopSettings.whatsapp,
+        confirmation_message: shopSettings.confirmationMessage,
+        reminder_message: shopSettings.reminderMessage,
+        reminder_minutes: shopSettings.reminderMinutes,
+        reminder_enabled: shopSettings.reminderEnabled,
+        online_booking_enabled: shopSettings.onlineBookingEnabled,
+        updated_at: new Date().toISOString()
+      }).eq('id', targetEstablishmentId);
+      if (error) { alert(`Não foi possível salvar as configurações no banco: ${error.message}`); return; }
+    } else if (supabase) {
+      alert('Não foi possível identificar o estabelecimento. Saia e entre novamente.');
+      return;
+    }
+    setSettingsSaved(true);
+    flashAction('Configurações concluídas');
+  };
+
+  const handleShopLogo = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
+    if (supabase && establishmentId) {
+      const extension = file.type.split('/')[1] || 'png';
+      const path = `${establishmentId}/logo-${Date.now()}.${extension}`;
+      const { error } = await supabase.storage.from('establishment-assets').upload(path, file, { upsert: true, contentType: file.type });
+      if (!error) {
+        const { data } = supabase.storage.from('establishment-assets').getPublicUrl(path);
+        handleSettingsChange('logo', data.publicUrl);
+        return;
+      }
+      alert('Não foi possível enviar a logo para o armazenamento.');
+    }
     const reader = new FileReader();
     reader.onload = () => handleSettingsChange('logo', reader.result);
     reader.readAsDataURL(file);
@@ -403,6 +462,7 @@ export default function App() {
     setAdminBooking({ ...adminBooking, clientName: '', clientPhone: '' });
     setAdminBookingOpen(false);
     setAdminBookingError('');
+    flashAction('Agendamento concluído');
   };
 
   // Barber Actions
@@ -420,6 +480,7 @@ export default function App() {
     setNewBarberName('');
     setNewBarberRole('');
     setNewBarberPhoto('');
+    flashAction('Barbeiro cadastrado');
   };
 
   const handleBarberPhoto = (file, onLoad) => {
@@ -433,6 +494,7 @@ export default function App() {
     e.preventDefault();
     setBarbers(barbers.map(b => b.id === editingBarber.id ? editingBarber : b));
     setEditingBarber(null);
+    flashAction('Barbeiro atualizado');
   };
 
   // Service Actions
@@ -456,6 +518,7 @@ export default function App() {
     setNewServiceName('');
     setNewServicePrice('');
     setNewServiceDescription('');
+    flashAction('Serviço cadastrado');
   };
 
   const handleUpdateService = async (e) => {
@@ -466,6 +529,7 @@ export default function App() {
     }
     setServices(current => current.map(s => s.id === editingService.id ? editingService : s));
     setEditingService(null);
+    flashAction('Serviço atualizado');
   };
 
   const handleDeleteService = async (serviceId) => {
@@ -474,6 +538,7 @@ export default function App() {
       if (error) { alert('Não foi possível remover o serviço do banco.'); return; }
     }
     setServices(current => current.filter(item => item.id !== serviceId));
+    flashAction('Serviço removido');
   };
 
   // Time Block Actions
@@ -528,6 +593,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
+      {actionFeedback && <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-300 shadow-lg"><CheckCircle2 className="w-4 h-4" />{actionFeedback}</div>}
       {/* Top Header Navigation */}
       <header className="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
@@ -1348,7 +1414,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6"><p className="text-xs uppercase font-semibold text-zinc-500 mb-3">Prévia da identidade pública</p><div className="rounded-lg p-5 border flex items-center gap-4" style={{ borderColor: shopSettings.primaryColor, backgroundColor: `${shopSettings.primaryColor}15` }}>{shopSettings.logo && <img src={shopSettings.logo} alt="Logo" className="w-16 h-16 rounded-xl object-cover" />}<div><p className="text-xs text-zinc-400">{shopSettings.businessType}</p><p className="font-bold text-lg" style={{ color: shopSettings.primaryColor }}>{shopSettings.name || 'Seu estabelecimento'}</p><p className="text-sm text-zinc-300 mt-1">{shopSettings.description}</p><p className="text-xs text-zinc-400 mt-1">{shopSettings.address} • {shopSettings.phone}</p></div></div></div>
-                <div className="flex justify-end"><button type="submit" className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold px-5 py-2.5 rounded-lg text-sm flex items-center gap-2"><Save className="w-4 h-4" /> Salvar configurações</button></div>
+                <div className="flex justify-end"><button type="submit" className={`font-bold px-5 py-2.5 rounded-lg text-sm flex items-center gap-2 transition ${actionFeedback === 'Configurações concluídas' ? 'bg-emerald-500 text-white' : 'bg-amber-500 hover:bg-amber-400 text-zinc-950'}`}><CheckCircle2 className="w-4 h-4" /> {actionFeedback === 'Configurações concluídas' ? 'Concluído' : 'Salvar configurações'}</button></div>
               </form>
             )}
 
