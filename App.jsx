@@ -235,8 +235,14 @@ export default function App() {
     }
   };
 
+  const saveClientToCloud = async (name, phone) => {
+    if (!supabase || !establishmentId) return;
+    const { error } = await supabase.from('clients').upsert({ establishment_id: establishmentId, name, phone }, { onConflict: 'establishment_id,phone' });
+    if (error) console.error('Falha ao salvar cliente:', error.message);
+  };
+
   // Handle Client Booking
-  const handleCreateAppointment = (e) => {
+  const handleCreateAppointment = async (e) => {
     e.preventDefault();
     if (!clientName || !clientPhone) return;
 
@@ -255,7 +261,8 @@ export default function App() {
       status: 'confirmado'
     };
 
-    setAppointments([...appointments, newAppointment]);
+    await saveClientToCloud(clientName, clientPhone);
+    setAppointments(current => [...current, newAppointment]);
     openWhatsAppMessage(newAppointment, 'confirmed');
     setBookingSuccess(true);
     setTimeout(() => {
@@ -360,7 +367,7 @@ export default function App() {
     ));
   };
 
-  const handleCreateAdminAppointment = (e) => {
+  const handleCreateAdminAppointment = async (e) => {
     e.preventDefault();
     const serviceObj = services.find(s => s.id === adminBooking.serviceId);
     const duration = serviceObj?.duration || 30;
@@ -370,7 +377,7 @@ export default function App() {
       return;
     }
 
-    setAppointments(current => [...current, {
+    const newAppointment = {
       id: Date.now().toString(),
       clientName: adminBooking.clientName,
       clientPhone: adminBooking.clientPhone,
@@ -382,7 +389,9 @@ export default function App() {
       price: serviceObj?.price || 0,
       paymentMethod: adminBooking.paymentMethod,
       status: 'confirmado'
-    }]);
+    };
+    await saveClientToCloud(newAppointment.clientName, newAppointment.clientPhone);
+    setAppointments(current => [...current, newAppointment]);
     openWhatsAppMessage({ ...adminBooking, ...{
       clientName: adminBooking.clientName,
       clientPhone: adminBooking.clientPhone,
@@ -427,7 +436,7 @@ export default function App() {
   };
 
   // Service Actions
-  const handleAddService = (e) => {
+  const handleAddService = async (e) => {
     e.preventDefault();
     if (!newServiceName || !newServicePrice) return;
     const newServ = {
@@ -438,16 +447,33 @@ export default function App() {
       category: newServiceCategory,
       description: newServiceDescription
     };
-    setServices([...services, newServ]);
+    if (supabase && establishmentId) {
+      const { data, error } = await supabase.from('services').insert({ establishment_id: establishmentId, name: newServ.name, description: newServ.description, price: newServ.price, duration_minutes: newServ.duration, category: newServ.category }).select().single();
+      if (error) { alert('Não foi possível salvar o serviço no banco.'); return; }
+      newServ.id = data.id;
+    }
+    setServices(current => [...current, newServ]);
     setNewServiceName('');
     setNewServicePrice('');
     setNewServiceDescription('');
   };
 
-  const handleUpdateService = (e) => {
+  const handleUpdateService = async (e) => {
     e.preventDefault();
-    setServices(services.map(s => s.id === editingService.id ? editingService : s));
+    if (supabase && establishmentId) {
+      const { error } = await supabase.from('services').update({ name: editingService.name, description: editingService.description, price: editingService.price, duration_minutes: editingService.duration, category: editingService.category }).eq('id', editingService.id).eq('establishment_id', establishmentId);
+      if (error) { alert('Não foi possível atualizar o serviço no banco.'); return; }
+    }
+    setServices(current => current.map(s => s.id === editingService.id ? editingService : s));
     setEditingService(null);
+  };
+
+  const handleDeleteService = async (serviceId) => {
+    if (supabase && establishmentId) {
+      const { error } = await supabase.from('services').update({ active: false }).eq('id', serviceId).eq('establishment_id', establishmentId);
+      if (error) { alert('Não foi possível remover o serviço do banco.'); return; }
+    }
+    setServices(current => current.filter(item => item.id !== serviceId));
   };
 
   // Time Block Actions
@@ -1277,7 +1303,7 @@ export default function App() {
                             <Edit3 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => setServices(services.filter(item => item.id !== s.id))}
+                            onClick={() => handleDeleteService(s.id)}
                             className="text-red-400 hover:text-red-300 p-1"
                             title="Excluir Serviço"
                           >
