@@ -363,6 +363,18 @@ export default function App() {
     window.setTimeout(() => setActionFeedback(''), 2500);
   };
 
+  const validateImageFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) {
+      alert('Selecione um arquivo de imagem válido.');
+      return false;
+    }
+    if (file.size > 300 * 1024) {
+      alert('A imagem não pode ter mais de 300 KB.');
+      return false;
+    }
+    return true;
+  };
+
   const saveShopSettings = async (e) => {
     e.preventDefault();
     let targetEstablishmentId = establishmentId;
@@ -405,7 +417,7 @@ export default function App() {
   };
 
   const handleShopLogo = async (file) => {
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!validateImageFile(file)) return;
     if (supabase && establishmentId) {
       const extension = file.type.split('/')[1] || 'png';
       const path = `${establishmentId}/logo-${Date.now()}.${extension}`;
@@ -487,7 +499,7 @@ export default function App() {
   };
 
   const handleBarberPhoto = (file, onLoad) => {
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!validateImageFile(file)) return;
     const reader = new FileReader();
     reader.onload = () => onLoad(reader.result);
     reader.readAsDataURL(file);
