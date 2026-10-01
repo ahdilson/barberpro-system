@@ -284,6 +284,8 @@ export default function App() {
     if (supabase && adminUsername.includes('@')) {
       const { error } = await supabase.auth.signInWithPassword({ email: adminUsername.trim(), password: adminPassword });
       if (!error) {
+        const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', (await supabase.auth.getUser()).data.user.id).maybeSingle();
+        if (profile?.establishment_id) setEstablishmentId(profile.establishment_id);
         setAdminRole('admin');
         setAdminAuthenticated(true);
         setAdminLoginError('');
