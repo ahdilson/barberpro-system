@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   Calendar, Clock, Scissors, User, DollarSign, 
   TrendingUp, Lock, Plus, Trash2, CheckCircle2, 
