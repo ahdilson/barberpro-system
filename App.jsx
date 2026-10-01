@@ -14,7 +14,7 @@ export default function App() {
   const [clientSubTab, setClientSubTab] = useState('book'); // 'book' or 'my-bookings'
   const [adminSection, setAdminSection] = useState('overview');
   const [shopSettings, setShopSettings] = useState({
-    name: 'BarberPro System', description: 'Atendimento personalizado para cuidar do seu estilo.', businessType: 'Barbearia', logo: '', phone: '(49) 99999-9999', address: 'Rua Principal, 100', instagram: '', locationUrl: '',
+    name: 'BarberPro System', slug: '', description: 'Atendimento personalizado para cuidar do seu estilo.', businessType: 'Barbearia', logo: '', phone: '(49) 99999-9999', address: 'Rua Principal, 100', instagram: '', locationUrl: '',
     primaryColor: '#f59e0b', whatsapp: '49999999999', confirmationMessage: 'Olá, {cliente}! Seu horário foi confirmado.',
     reminderMessage: 'Olá, {cliente}! Lembrete: seu horário é amanhã às {horario}.', reminderMinutes: 1440,
     metaPhoneNumberId: '', metaBusinessAccountId: '', metaAccessToken: '',
@@ -161,7 +161,7 @@ export default function App() {
         supabase.from('services').select('*').eq('establishment_id', targetEstablishmentId).eq('active', true).order('created_at')
       ]);
       if (!mounted) return;
-      if (establishment) setShopSettings(current => ({ ...current, name: establishment.name, businessType: establishment.business_type, description: establishment.description, logo: establishment.logo_url || '', phone: establishment.phone, address: establishment.address, instagram: establishment.instagram_url, locationUrl: establishment.location_url, primaryColor: establishment.primary_color, whatsapp: establishment.whatsapp, confirmationMessage: establishment.confirmation_message, reminderMessage: establishment.reminder_message, reminderMinutes: establishment.reminder_minutes, reminderEnabled: establishment.reminder_enabled, onlineBookingEnabled: establishment.online_booking_enabled }));
+      if (establishment) setShopSettings(current => ({ ...current, name: establishment.name, slug: establishment.slug || '', businessType: establishment.business_type, description: establishment.description, logo: establishment.logo_url || '', phone: establishment.phone, address: establishment.address, instagram: establishment.instagram_url, locationUrl: establishment.location_url, primaryColor: establishment.primary_color, whatsapp: establishment.whatsapp, confirmationMessage: establishment.confirmation_message, reminderMessage: establishment.reminder_message, reminderMinutes: establishment.reminder_minutes, reminderEnabled: establishment.reminder_enabled, onlineBookingEnabled: establishment.online_booking_enabled }));
       if (cloudServices?.length) setServices(cloudServices.map(service => ({ id: service.id, name: service.name, description: service.description, price: Number(service.price), duration: service.duration_minutes, category: service.category })));
     };
     loadCloudData();
@@ -389,6 +389,7 @@ export default function App() {
     if (supabase && targetEstablishmentId) {
       const { data: savedEstablishments, error } = await supabase.from('establishments').update({
         name: shopSettings.name,
+        slug: shopSettings.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''),
         business_type: shopSettings.businessType,
         description: shopSettings.description,
         phone: shopSettings.phone,
@@ -407,7 +408,7 @@ export default function App() {
       if (error) { alert(`Não foi possível salvar as configurações no banco: ${error.message}`); return; }
       const savedEstablishment = savedEstablishments?.[0];
       if (!savedEstablishment) { alert('A sessão atual não tem permissão para atualizar este estabelecimento. Saia do painel e entre novamente.'); return; }
-      setShopSettings(current => ({ ...current, name: savedEstablishment.name, businessType: savedEstablishment.business_type, description: savedEstablishment.description, phone: savedEstablishment.phone, address: savedEstablishment.address, instagram: savedEstablishment.instagram_url, locationUrl: savedEstablishment.location_url, primaryColor: savedEstablishment.primary_color, whatsapp: savedEstablishment.whatsapp, confirmationMessage: savedEstablishment.confirmation_message, reminderMessage: savedEstablishment.reminder_message, reminderMinutes: savedEstablishment.reminder_minutes, reminderEnabled: savedEstablishment.reminder_enabled, onlineBookingEnabled: savedEstablishment.online_booking_enabled }));
+      setShopSettings(current => ({ ...current, name: savedEstablishment.name, slug: savedEstablishment.slug || '', businessType: savedEstablishment.business_type, description: savedEstablishment.description, phone: savedEstablishment.phone, address: savedEstablishment.address, instagram: savedEstablishment.instagram_url, locationUrl: savedEstablishment.location_url, primaryColor: savedEstablishment.primary_color, whatsapp: savedEstablishment.whatsapp, confirmationMessage: savedEstablishment.confirmation_message, reminderMessage: savedEstablishment.reminder_message, reminderMinutes: savedEstablishment.reminder_minutes, reminderEnabled: savedEstablishment.reminder_enabled, onlineBookingEnabled: savedEstablishment.online_booking_enabled }));
     } else if (supabase) {
       alert('Não foi possível identificar o estabelecimento. Saia e entre novamente.');
       return;
@@ -1405,6 +1406,7 @@ export default function App() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4"><h3 className="font-bold text-white">Identidade do estabelecimento</h3>
                     <label className="block text-xs font-semibold text-zinc-400">Nome do estabelecimento<input value={shopSettings.name} onChange={e => handleSettingsChange('name', e.target.value)} className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm" /></label>
+                    <label className="block text-xs font-semibold text-zinc-400">Link personalizado da página<div className="flex items-center mt-1"><span className="bg-zinc-800 border border-r-0 border-zinc-700 rounded-l-lg px-3 py-2.5 text-xs text-zinc-500">/</span><input value={shopSettings.slug} onChange={e => handleSettingsChange('slug', e.target.value)} placeholder="nome-da-barbearia" className="w-full bg-zinc-800 border border-zinc-700 rounded-r-lg p-2.5 text-white text-sm" /></div><span className="block text-xs text-zinc-500 mt-1">Use apenas letras, números e hífen.</span></label>
                     <label className="block text-xs font-semibold text-zinc-400">Tipo de negócio<select value={shopSettings.businessType} onChange={e => handleSettingsChange('businessType', e.target.value)} className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm"><option>Barbearia</option><option>Salão de beleza</option><option>Espaço de beleza</option><option>Estúdio de estética</option><option>Outro</option></select></label>
                     <label className="block text-xs font-semibold text-zinc-400">Logo do estabelecimento<div className="flex items-center gap-3 mt-1">{shopSettings.logo ? <img src={shopSettings.logo} alt="Prévia da logo" className="w-16 h-16 rounded-xl object-cover border border-zinc-700" /> : <div className="w-16 h-16 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500">Sem logo</div>}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => handleShopLogo(e.target.files?.[0])} className="w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white" /></div></label>
                     <label className="block text-xs font-semibold text-zinc-400">Descrição pública<textarea value={shopSettings.description} onChange={e => handleSettingsChange('description', e.target.value)} placeholder="Apresente seu estabelecimento aos clientes" rows="3" className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm resize-none" /></label>
