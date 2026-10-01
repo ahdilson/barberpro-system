@@ -320,9 +320,13 @@ export default function App() {
     }
   };
 
-  const handlePlatformLogin = (e) => {
+  const handlePlatformLogin = async (e) => {
     e.preventDefault();
     if (platformUsername === 'master' && platformPassword === platformPasswordCredential) {
+      if (supabase) {
+        const { data: cloudEstablishments } = await supabase.from('establishments').select('id, name, slug, updated_at').order('name');
+        if (cloudEstablishments) setBarbershops(cloudEstablishments.map(shop => ({ id: shop.id, name: shop.name, owner: 'Não informado', plan: 'Não definido', status: 'ativo', payment: 'Não informado', nextPayment: 'Não definido', slug: shop.slug || '' })));
+      }
       setPlatformAuthenticated(true);
       setPlatformLoginError('');
       setPlatformPassword('');
