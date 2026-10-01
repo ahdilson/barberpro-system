@@ -146,13 +146,19 @@ export default function App() {
     let mounted = true;
     const loadCloudData = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
-      const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', session.user.id).maybeSingle();
-      if (!profile?.establishment_id || !mounted) return;
-      setEstablishmentId(profile.establishment_id);
+      let targetEstablishmentId = null;
+      if (session?.user) {
+        const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', session.user.id).maybeSingle();
+        targetEstablishmentId = profile?.establishment_id || null;
+      } else {
+        const { data: publicEstablishment } = await supabase.from('establishments').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
+        targetEstablishmentId = publicEstablishment?.id || null;
+      }
+      if (!targetEstablishmentId || !mounted) return;
+      setEstablishmentId(targetEstablishmentId);
       const [{ data: establishment }, { data: cloudServices }] = await Promise.all([
-        supabase.from('establishments').select('*').eq('id', profile.establishment_id).single(),
-        supabase.from('services').select('*').eq('establishment_id', profile.establishment_id).eq('active', true).order('created_at')
+        supabase.from('establishments').select('*').eq('id', targetEstablishmentId).single(),
+        supabase.from('services').select('*').eq('establishment_id', targetEstablishmentId).eq('active', true).order('created_at')
       ]);
       if (!mounted) return;
       if (establishment) setShopSettings(current => ({ ...current, name: establishment.name, businessType: establishment.business_type, description: establishment.description, logo: establishment.logo_url || '', phone: establishment.phone, address: establishment.address, instagram: establishment.instagram_url, locationUrl: establishment.location_url, primaryColor: establishment.primary_color, whatsapp: establishment.whatsapp, confirmationMessage: establishment.confirmation_message, reminderMessage: establishment.reminder_message, reminderMinutes: establishment.reminder_minutes, reminderEnabled: establishment.reminder_enabled, onlineBookingEnabled: establishment.online_booking_enabled }));
