@@ -1,5 +1,50 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from './supabase';
+
+const todayISO = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+})();
+
+const clock = (value) => String(value || '').slice(0, 5);
+
+const mapBusy = (row) => ({
+  id: `busy-${row.professional_id}-${row.appointment_date}-${clock(row.appointment_time)}`,
+  clientName: '',
+  clientPhone: '',
+  barberId: row.professional_id,
+  serviceId: '',
+  date: row.appointment_date,
+  time: clock(row.appointment_time),
+  duration: row.duration_minutes || 30,
+  price: 0,
+  paymentMethod: 'pendente',
+  status: 'confirmado'
+});
+
+const mapLookup = (row) => ({
+  id: row.id,
+  clientName: row.client_name,
+  clientPhone: row.client_phone,
+  barberId: row.professional_id,
+  serviceId: row.service_id,
+  date: row.appointment_date,
+  time: clock(row.appointment_time),
+  duration: row.duration_minutes || 30,
+  price: Number(row.price || 0),
+  paymentMethod: row.payment_method,
+  status: row.status
+});
+
+const mapBlock = (row) => ({
+  id: row.id,
+  barberId: row.professional_id,
+  date: row.block_date,
+  startTime: clock(row.start_time),
+  endTime: clock(row.end_time),
+  reason: row.reason || '',
+  isRecurring: row.is_recurring
+});
 import { 
   Calendar, Clock, Scissors, User, DollarSign, 
   TrendingUp, Lock, Plus, Trash2, CheckCircle2, 
@@ -14,7 +59,7 @@ export default function App() {
   const [clientSubTab, setClientSubTab] = useState('book'); // 'book' or 'my-bookings'
   const [adminSection, setAdminSection] = useState('overview');
   const [shopSettings, setShopSettings] = useState({
-    name: 'BarberPro System', description: 'Atendimento personalizado para cuidar do seu estilo.', businessType: 'Barbearia', logo: '', phone: '(49) 99999-9999', address: 'Rua Principal, 100', instagram: '', locationUrl: '',
+    name: 'BarberPro System', slug: '', description: 'Atendimento personalizado para cuidar do seu estilo.', businessType: 'Barbearia', logo: '', phone: '(49) 99999-9999', address: 'Rua Principal, 100', instagram: '', locationUrl: '',
     primaryColor: '#f59e0b', whatsapp: '49999999999', confirmationMessage: 'Olá, {cliente}! Seu horário foi confirmado.',
     reminderMessage: 'Olá, {cliente}! Lembrete: seu horário é amanhã às {horario}.', reminderMinutes: 1440,
     metaPhoneNumberId: '', metaBusinessAccountId: '', metaAccessToken: '',
@@ -26,31 +71,25 @@ export default function App() {
   const [platformUsername, setPlatformUsername] = useState('');
   const [platformPassword, setPlatformPassword] = useState('');
   const [platformLoginError, setPlatformLoginError] = useState('');
-  const [platformPasswordCredential, setPlatformPasswordCredential] = useState('master123');
   const [platformChangePasswordOpen, setPlatformChangePasswordOpen] = useState(false);
   const [platformCurrentPassword, setPlatformCurrentPassword] = useState('');
   const [platformNewPassword, setPlatformNewPassword] = useState('');
   const [platformPasswordMessage, setPlatformPasswordMessage] = useState('');
-  const [barbershops, setBarbershops] = useState([
-    { id: 'shop-1', name: 'Barbearia Central', owner: 'Rafael Oliveira', plan: 'Profissional', status: 'ativo', payment: 'Em dia', nextPayment: '05/10/2026' },
-    { id: 'shop-2', name: 'Corte Nobre', owner: 'André Martins', plan: 'Básico', status: 'ativo', payment: 'Em dia', nextPayment: '12/10/2026' },
-    { id: 'shop-3', name: 'Barba & Estilo', owner: 'Thiago Souza', plan: 'Profissional', status: 'suspenso', payment: 'Inadimplente', nextPayment: '20/09/2026' }
-  ]);
+  const [barbershops, setBarbershops] = useState([]);
+  const [platformDataLoading, setPlatformDataLoading] = useState(false);
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [adminRole, setAdminRole] = useState('admin');
   const [loggedBarberId, setLoggedBarberId] = useState(null);
   const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
-  const [adminPasswordCredential, setAdminPasswordCredential] = useState('admin123');
-  const [barberPasswordCredentials, setBarberPasswordCredentials] = useState({ '1': 'barbeiro123', '2': 'barbeiro123', '3': 'barbeiro123' });
   const [adminChangePasswordOpen, setAdminChangePasswordOpen] = useState(false);
   const [adminCurrentPassword, setAdminCurrentPassword] = useState('');
   const [adminNewPassword, setAdminNewPassword] = useState('');
   const [adminPasswordMessage, setAdminPasswordMessage] = useState('');
 
   // --- DYNAMIC DATA STATES ---
-  const [barbers, setBarbers] = useState([
+  const [barbers, setBarbers] = useState(isSupabaseConfigured ? [] : [
     { id: '1', name: 'Marcos Silva', role: 'Master Barber', commission: 50, avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
     { id: '2', name: 'Lucas Santos', role: 'Especialista em Barba', commission: 45, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
     { id: '3', name: 'Felipe Costa', role: 'Corte Moderno / Fade', commission: 40, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150' }
@@ -63,15 +102,17 @@ export default function App() {
     { id: '4', name: 'Acabamento / Pezinho', price: 20, duration: 15, category: 'Cabelo', description: 'Acabamento de nuca, costeletas e contornos.' }
   ]);
 
-  const [appointments, setAppointments] = useState([
-    { id: '101', clientName: 'João Pedro', clientPhone: '(49) 99911-2233', barberId: '1', serviceId: '3', date: '2026-10-01', time: '14:00', duration: 60, price: 70, paymentMethod: 'pix', status: 'confirmado' },
-    { id: '102', clientName: 'Carlos Eduardo', clientPhone: '(49) 98844-5566', barberId: '2', serviceId: '1', date: '2026-10-01', time: '15:00', duration: 30, price: 45, paymentMethod: 'cartao', status: 'confirmado' }
+  const [appointments, setAppointments] = useState(isSupabaseConfigured ? [] : [
+    { id: '101', clientName: 'João Pedro', clientPhone: '(49) 99911-2233', barberId: '1', serviceId: '3', date: todayISO, time: '14:00', duration: 60, price: 70, paymentMethod: 'pix', status: 'confirmado' },
+    { id: '102', clientName: 'Carlos Eduardo', clientPhone: '(49) 98844-5566', barberId: '2', serviceId: '1', date: todayISO, time: '15:00', duration: 30, price: 45, paymentMethod: 'cartao', status: 'confirmado' }
   ]);
+  const [lookupResults, setLookupResults] = useState([]);
+  const [agendaVersion, setAgendaVersion] = useState(0);
 
   // Recurrent blocks support (isRecurring: true for fixed lunch hours)
-  const [timeBlocks, setTimeBlocks] = useState([
-    { id: '201', barberId: '1', date: '2026-10-01', startTime: '12:00', endTime: '13:30', reason: 'Horário de Almoço (Fixo)', isRecurring: true },
-    { id: '202', barberId: '2', date: '2026-10-01', startTime: '12:00', endTime: '13:00', reason: 'Horário de Almoço (Fixo)', isRecurring: true }
+  const [timeBlocks, setTimeBlocks] = useState(isSupabaseConfigured ? [] : [
+    { id: '201', barberId: '1', date: todayISO, startTime: '12:00', endTime: '13:30', reason: 'Horário de Almoço (Fixo)', isRecurring: true },
+    { id: '202', barberId: '2', date: todayISO, startTime: '12:00', endTime: '13:00', reason: 'Horário de Almoço (Fixo)', isRecurring: true }
   ]);
 
   // --- EDITING STATES ---
@@ -85,7 +126,7 @@ export default function App() {
   // Client Booking Form
   const [selectedBarber, setSelectedBarber] = useState(barbers[0]?.id || '');
   const [selectedService, setSelectedService] = useState(services[0]?.id || '');
-  const [bookingDate, setBookingDate] = useState('2026-10-01');
+  const [bookingDate, setBookingDate] = useState(todayISO);
   const [bookingTime, setBookingTime] = useState('10:00');
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -98,13 +139,13 @@ export default function App() {
     clientPhone: '',
     barberId: barbers[0]?.id || '',
     serviceId: services[0]?.id || '',
-    date: '2026-10-01',
+    date: todayISO,
     time: '09:00',
     paymentMethod: 'pix'
   });
   const [adminBookingError, setAdminBookingError] = useState('');
-  const [reportStartDate, setReportStartDate] = useState('2026-10-01');
-  const [reportEndDate, setReportEndDate] = useState('2026-10-31');
+  const [reportStartDate, setReportStartDate] = useState(todayISO);
+  const [reportEndDate, setReportEndDate] = useState(todayISO);
   const [reportPaymentMethod, setReportPaymentMethod] = useState('todos');
 
   // New Barber Form
@@ -122,7 +163,7 @@ export default function App() {
 
   // Time Block Form
   const [blockBarberId, setBlockBarberId] = useState(barbers[0]?.id || '');
-  const [blockDate, setBlockDate] = useState('2026-10-01');
+  const [blockDate, setBlockDate] = useState(todayISO);
   const [blockStartTime, setBlockStartTime] = useState('12:00');
   const [blockEndTime, setBlockEndTime] = useState('13:30');
   const [blockReason, setBlockReason] = useState('Horário de Almoço');
@@ -144,12 +185,32 @@ export default function App() {
   useEffect(() => {
     if (!supabase) return undefined;
     let mounted = true;
+    const loadPlatformData = async () => {
+      setPlatformDataLoading(true);
+      const { data } = await supabase.from('establishments').select('id, name, slug, updated_at').order('name');
+      if (mounted && data) setBarbershops(data.map(shop => ({ id: shop.id, name: shop.name, owner: 'Não informado', plan: 'Não definido', status: 'ativo', payment: 'Não informado', nextPayment: 'Não definido', slug: shop.slug || '' })));
+      if (mounted) setPlatformDataLoading(false);
+    };
+    loadPlatformData();
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    let mounted = true;
     const loadCloudData = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       let targetEstablishmentId = null;
       if (session?.user) {
         const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', session.user.id).maybeSingle();
         targetEstablishmentId = profile?.establishment_id || null;
+        if (profile && mounted) {
+          const isBarber = profile.role === 'professional';
+          setAdminRole(isBarber ? 'barber' : 'admin');
+          setLoggedBarberId(isBarber ? session.user.id : null);
+          setAdminAuthenticated(profile.role !== 'platform_admin');
+          if (profile.role === 'platform_admin') setPlatformAuthenticated(true);
+        }
       } else {
         const { data: publicEstablishments } = await supabase.from('establishments').select('id').limit(1);
         targetEstablishmentId = publicEstablishments?.[0]?.id || null;
@@ -161,19 +222,98 @@ export default function App() {
         supabase.from('services').select('*').eq('establishment_id', targetEstablishmentId).eq('active', true).order('created_at')
       ]);
       if (!mounted) return;
-      if (establishment) setShopSettings(current => ({ ...current, name: establishment.name, businessType: establishment.business_type, description: establishment.description, logo: establishment.logo_url || '', phone: establishment.phone, address: establishment.address, instagram: establishment.instagram_url, locationUrl: establishment.location_url, primaryColor: establishment.primary_color, whatsapp: establishment.whatsapp, confirmationMessage: establishment.confirmation_message, reminderMessage: establishment.reminder_message, reminderMinutes: establishment.reminder_minutes, reminderEnabled: establishment.reminder_enabled, onlineBookingEnabled: establishment.online_booking_enabled }));
-      if (cloudServices?.length) setServices(cloudServices.map(service => ({ id: service.id, name: service.name, description: service.description, price: Number(service.price), duration: service.duration_minutes, category: service.category })));
+      if (establishment) setShopSettings(current => ({ ...current, name: establishment.name, slug: establishment.slug || '', businessType: establishment.business_type, description: establishment.description, logo: establishment.logo_url || '', phone: establishment.phone, address: establishment.address, instagram: establishment.instagram_url, locationUrl: establishment.location_url, primaryColor: establishment.primary_color, whatsapp: establishment.whatsapp, confirmationMessage: establishment.confirmation_message, reminderMessage: establishment.reminder_message, reminderMinutes: establishment.reminder_minutes, reminderEnabled: establishment.reminder_enabled, onlineBookingEnabled: establishment.online_booking_enabled }));
+      if (cloudServices) setServices(cloudServices.map(service => ({ id: service.id, name: service.name, description: service.description, price: Number(service.price), duration: service.duration_minutes, category: service.category })));
     };
     loadCloudData();
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (!supabase || !establishmentId) return undefined;
+    let mounted = true;
+    const loadAgenda = async () => {
+      const [{ data: profs }, { data: busy }, { data: blocks }] = await Promise.all([
+        supabase.rpc('list_public_professionals', { p_establishment: establishmentId }),
+        supabase.rpc('list_public_busy', { p_establishment: establishmentId }),
+        supabase.rpc('list_public_blocks', { p_establishment: establishmentId })
+      ]);
+      if (!mounted) return;
+      if (profs) {
+        setBarbers(profs.map(person => ({
+          id: person.id,
+          name: person.full_name,
+          role: 'Profissional',
+          commission: 0,
+          avatar: person.photo_url || `https://ui-avatars.com/api/?background=27272a&color=f59e0b&name=${encodeURIComponent(person.full_name || 'P')}`
+        })));
+      }
+      if (blocks) setTimeBlocks(blocks.map(mapBlock));
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const [{ data: fullApps }, { data: memberProfiles }] = await Promise.all([
+          supabase.from('appointments').select('id, professional_id, service_id, appointment_date, appointment_time, status, payment_method, clients(name, phone), services(duration_minutes, price)').eq('establishment_id', establishmentId),
+          supabase.from('profiles').select('id, full_name, photo_url, commission, role, active').eq('establishment_id', establishmentId).eq('active', true)
+        ]);
+        if (!mounted) return;
+        if (memberProfiles?.length) {
+          setBarbers(memberProfiles.map(person => ({
+            id: person.id,
+            name: person.full_name,
+            role: person.role === 'establishment_admin' ? 'Administrador' : 'Profissional',
+            commission: Number(person.commission || 0),
+            avatar: person.photo_url || `https://ui-avatars.com/api/?background=27272a&color=f59e0b&name=${encodeURIComponent(person.full_name || 'P')}`
+          })));
+        }
+        if (fullApps) {
+          setAppointments(fullApps.map(row => ({
+            id: row.id,
+            clientName: row.clients?.name || '',
+            clientPhone: row.clients?.phone || '',
+            barberId: row.professional_id,
+            serviceId: row.service_id,
+            date: row.appointment_date,
+            time: clock(row.appointment_time),
+            duration: row.services?.duration_minutes || 30,
+            price: Number(row.services?.price || 0),
+            paymentMethod: row.payment_method,
+            status: row.status
+          })));
+          return;
+        }
+      }
+      if (busy) setAppointments(busy.map(mapBusy));
+    };
+    loadAgenda();
+    return () => { mounted = false; };
+  }, [establishmentId, agendaVersion]);
+
+  useEffect(() => {
+    if (!supabase || !establishmentId) return undefined;
+    const digits = searchPhone.replace(/\D/g, '');
+    if (digits.length < 8) {
+      setLookupResults([]);
+      return undefined;
+    }
+    let mounted = true;
+    const timer = window.setTimeout(async () => {
+      const { data, error } = await supabase.rpc('lookup_my_appointments', { p_establishment: establishmentId, p_phone: searchPhone });
+      if (mounted && !error && data) setLookupResults(data.map(mapLookup));
+    }, 300);
+    return () => { mounted = false; window.clearTimeout(timer); };
+  }, [searchPhone, establishmentId, agendaVersion]);
+
+  useEffect(() => {
+    if (barbers.length && !barbers.some(person => person.id === selectedBarber)) setSelectedBarber(barbers[0].id);
+    if (services.length && !services.some(service => service.id === selectedService)) setSelectedService(services[0].id);
+  }, [barbers, services, selectedBarber, selectedService]);
 
   // Available Time Slots (30 min increments)
   const timeSlots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'];
 
   // Helper: Convert time string 'HH:MM' to minutes from midnight
   const timeToMinutes = (timeStr) => {
-    const [h, m] = timeStr.split(':').map(Number);
+    const [h, m] = clock(timeStr).split(':').map(Number);
     return h * 60 + m;
   };
 
@@ -232,20 +372,24 @@ export default function App() {
   };
 
   // Cancel Appointment Action
-  const handleCancelAppointment = (id) => {
-    if (window.confirm('Tem certeza que deseja cancelar este agendamento?')) {
-      const appointment = appointments.find(app => app.id === id);
-      setAppointments(appointments.map(app => 
-        app.id === id ? { ...app, status: 'cancelado' } : app
-      ));
-      if (appointment) openWhatsAppMessage(appointment, 'cancelled');
+  const handleCancelAppointment = async (id) => {
+    if (!window.confirm('Tem certeza que deseja cancelar este agendamento?')) return;
+    const appointment = appointments.find(app => app.id === id) || lookupResults.find(app => app.id === id);
+    if (supabase && establishmentId && appointment) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { error } = await supabase.from('appointments').update({ status: 'cancelado' }).eq('id', id).eq('establishment_id', establishmentId);
+        if (error) { alert('Não foi possível cancelar no banco.'); return; }
+      } else {
+        const phone = appointment.clientPhone || searchPhone;
+        const { data, error } = await supabase.rpc('cancel_public_appointment', { p_establishment: establishmentId, p_appointment: id, p_phone: phone });
+        if (error || !data) { alert('Não foi possível cancelar este horário.'); return; }
+      }
+      setAgendaVersion(version => version + 1);
+    } else {
+      setAppointments(current => current.map(app => app.id === id ? { ...app, status: 'cancelado' } : app));
     }
-  };
-
-  const saveClientToCloud = async (name, phone) => {
-    if (!supabase || !establishmentId) return;
-    const { error } = await supabase.from('clients').upsert({ establishment_id: establishmentId, name, phone }, { onConflict: 'establishment_id,phone' });
-    if (error) console.error('Falha ao salvar cliente:', error.message);
+    if (appointment) openWhatsAppMessage(appointment, 'cancelled');
   };
 
   // Handle Client Booking
@@ -268,8 +412,23 @@ export default function App() {
       status: 'confirmado'
     };
 
-    await saveClientToCloud(clientName, clientPhone);
-    setAppointments(current => [...current, newAppointment]);
+    if (supabase && establishmentId) {
+      if (!shopSettings.onlineBookingEnabled) { alert('O agendamento online está desativado.'); return; }
+      if (isSlotUnavailable(selectedBarber, bookingDate, bookingTime, selectedService)) { alert('Este horário não está disponível.'); return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: clientRow, error: clientError } = await supabase.from('clients').upsert({ establishment_id: establishmentId, name: clientName, phone: clientPhone }, { onConflict: 'establishment_id,phone' }).select('id').single();
+        if (clientError) { alert('Não foi possível salvar o cliente.'); return; }
+        const { error } = await supabase.from('appointments').insert({ establishment_id: establishmentId, client_id: clientRow.id, professional_id: selectedBarber, service_id: selectedService, appointment_date: bookingDate, appointment_time: bookingTime, status: 'confirmado', payment_method: 'pendente' });
+        if (error) { alert(`Não foi possível gravar o horário: ${error.message}`); return; }
+      } else {
+        const { error } = await supabase.rpc('book_public_appointment', { p_establishment: establishmentId, p_professional: selectedBarber, p_service: selectedService, p_date: bookingDate, p_time: bookingTime, p_name: clientName, p_phone: clientPhone });
+        if (error) { alert(error.message); return; }
+      }
+      setAgendaVersion(version => version + 1);
+    } else {
+      setAppointments(current => [...current, newAppointment]);
+    }
     openWhatsAppMessage(newAppointment, 'confirmed');
     setBookingSuccess(true);
     flashAction('Agendamento concluído');
@@ -285,72 +444,65 @@ export default function App() {
     setAdminBookingError('');
   };
 
+  const applyProfileSession = (user, profile) => {
+    if (profile?.establishment_id) setEstablishmentId(profile.establishment_id);
+    const isBarber = profile?.role === 'professional';
+    setAdminRole(isBarber ? 'barber' : 'admin');
+    setLoggedBarberId(isBarber ? user.id : null);
+    setAgendaVersion(version => version + 1);
+  };
+
   const handleAdminLogin = async (e) => {
     e.preventDefault();
-    if (supabase && adminUsername.includes('@')) {
-      const { error } = await supabase.auth.signInWithPassword({ email: adminUsername.trim(), password: adminPassword });
-      if (!error) {
-        const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', (await supabase.auth.getUser()).data.user.id).maybeSingle();
-        if (profile?.establishment_id) setEstablishmentId(profile.establishment_id);
-        setAdminRole('admin');
-        setAdminAuthenticated(true);
-        setAdminLoginError('');
-        return;
-      }
-      setAdminLoginError('E-mail ou senha inválidos.');
+    if (!supabase) { setAdminLoginError('Supabase não está configurado.'); return; }
+    const { data, error } = await supabase.auth.signInWithPassword({ email: adminUsername.trim(), password: adminPassword });
+    if (error || !data.user) { setAdminLoginError('E-mail ou senha inválidos.'); return; }
+    const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', data.user.id).maybeSingle();
+    if (!profile || !['establishment_admin', 'professional', 'platform_admin'].includes(profile.role)) {
+      await supabase.auth.signOut();
+      setAdminLoginError('Esta conta não tem acesso ao painel.');
       return;
     }
-    if (adminUsername === 'admin' && adminPassword === adminPasswordCredential) {
-      setAdminAuthenticated(true);
-      setAdminRole('admin');
-      setLoggedBarberId(null);
-      setAdminLoginError('');
-      setAdminPassword('');
-    } else {
-      const barber = barbers.find(item => item.name.toLowerCase().split(' ')[0] === adminUsername.toLowerCase());
-      if (barber && adminPassword === barberPasswordCredentials[barber.id]) {
-        setAdminAuthenticated(true);
-        setAdminRole('barber');
-        setLoggedBarberId(barber.id);
-        setAdminLoginError('');
-        setAdminPassword('');
-      } else {
-        setAdminLoginError('Usuário ou senha inválidos.');
-      }
-    }
+    applyProfileSession(data.user, profile);
+    setAdminAuthenticated(true);
+    setAdminLoginError('');
+    setAdminPassword('');
   };
 
-  const handlePlatformLogin = (e) => {
+  const handlePlatformLogin = async (e) => {
     e.preventDefault();
-    if (platformUsername === 'master' && platformPassword === platformPasswordCredential) {
-      setPlatformAuthenticated(true);
-      setPlatformLoginError('');
-      setPlatformPassword('');
-    } else {
-      setPlatformLoginError('Usuário ou senha inválidos.');
+    if (!supabase) { setPlatformLoginError('Supabase não está configurado.'); return; }
+    const { data, error } = await supabase.auth.signInWithPassword({ email: platformUsername.trim(), password: platformPassword });
+    if (error || !data.user) { setPlatformLoginError('E-mail ou senha inválidos.'); return; }
+    const { data: profile } = await supabase.from('profiles').select('establishment_id, role').eq('id', data.user.id).maybeSingle();
+    if (profile?.role !== 'platform_admin') {
+      await supabase.auth.signOut();
+      setPlatformLoginError('Esta conta não é administradora da plataforma.');
+      return;
     }
+    applyProfileSession(data.user, profile);
+    setPlatformAuthenticated(true);
+    setPlatformLoginError('');
+    setPlatformPassword('');
   };
 
-  const handleChangePassword = (type, e) => {
+  const handleChangePassword = async (type, e) => {
     e.preventDefault();
     const isPlatform = type === 'platform';
     const current = isPlatform ? platformCurrentPassword : adminCurrentPassword;
     const next = isPlatform ? platformNewPassword : adminNewPassword;
-    const currentCredential = isPlatform
-      ? platformPasswordCredential
-      : adminRole === 'barber' ? barberPasswordCredentials[loggedBarberId] : adminPasswordCredential;
-    if (current !== currentCredential || next.length < 6) {
-      const message = current !== currentCredential ? 'A senha atual está incorreta.' : 'A nova senha deve ter pelo menos 6 caracteres.';
-      if (isPlatform) setPlatformPasswordMessage(message); else setAdminPasswordMessage(message);
-      return;
-    }
-    if (isPlatform) {
-      setPlatformPasswordCredential(next); setPlatformCurrentPassword(''); setPlatformNewPassword(''); setPlatformPasswordMessage('Senha alterada com sucesso.');
-    } else {
-      if (adminRole === 'barber') setBarberPasswordCredentials(current => ({ ...current, [loggedBarberId]: next }));
-      else setAdminPasswordCredential(next);
-      setAdminCurrentPassword(''); setAdminNewPassword(''); setAdminPasswordMessage('Senha alterada com sucesso.');
-    }
+    const setMessage = isPlatform ? setPlatformPasswordMessage : setAdminPasswordMessage;
+    if (!supabase) { setMessage('Supabase não está configurado.'); return; }
+    if (next.length < 6) { setMessage('A nova senha deve ter pelo menos 6 caracteres.'); return; }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email) { setMessage('Nenhuma sessão ativa.'); return; }
+    const { error: currentError } = await supabase.auth.signInWithPassword({ email: user.email, password: current });
+    if (currentError) { setMessage('A senha atual está incorreta.'); return; }
+    const { error } = await supabase.auth.updateUser({ password: next });
+    if (error) { setMessage('Não foi possível alterar a senha.'); return; }
+    if (isPlatform) { setPlatformCurrentPassword(''); setPlatformNewPassword(''); }
+    else { setAdminCurrentPassword(''); setAdminNewPassword(''); }
+    setMessage('Senha alterada com sucesso.');
   };
 
   const handleSettingsChange = (field, value) => {
@@ -361,6 +513,18 @@ export default function App() {
   const flashAction = (message) => {
     setActionFeedback(message);
     window.setTimeout(() => setActionFeedback(''), 2500);
+  };
+
+  const validateImageFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) {
+      alert('Selecione um arquivo de imagem válido.');
+      return false;
+    }
+    if (file.size > 300 * 1024) {
+      alert('A imagem não pode ter mais de 300 KB.');
+      return false;
+    }
+    return true;
   };
 
   const saveShopSettings = async (e) => {
@@ -375,8 +539,9 @@ export default function App() {
       }
     }
     if (supabase && targetEstablishmentId) {
-      const { error } = await supabase.from('establishments').update({
+      const { data: savedEstablishments, error } = await supabase.from('establishments').update({
         name: shopSettings.name,
+        slug: shopSettings.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''),
         business_type: shopSettings.businessType,
         description: shopSettings.description,
         phone: shopSettings.phone,
@@ -391,8 +556,11 @@ export default function App() {
         reminder_enabled: shopSettings.reminderEnabled,
         online_booking_enabled: shopSettings.onlineBookingEnabled,
         updated_at: new Date().toISOString()
-      }).eq('id', targetEstablishmentId);
+      }).eq('id', targetEstablishmentId).select('*');
       if (error) { alert(`Não foi possível salvar as configurações no banco: ${error.message}`); return; }
+      const savedEstablishment = savedEstablishments?.[0];
+      if (!savedEstablishment) { alert('A sessão atual não tem permissão para atualizar este estabelecimento. Saia do painel e entre novamente.'); return; }
+      setShopSettings(current => ({ ...current, name: savedEstablishment.name, slug: savedEstablishment.slug || '', businessType: savedEstablishment.business_type, description: savedEstablishment.description, phone: savedEstablishment.phone, address: savedEstablishment.address, instagram: savedEstablishment.instagram_url, locationUrl: savedEstablishment.location_url, primaryColor: savedEstablishment.primary_color, whatsapp: savedEstablishment.whatsapp, confirmationMessage: savedEstablishment.confirmation_message, reminderMessage: savedEstablishment.reminder_message, reminderMinutes: savedEstablishment.reminder_minutes, reminderEnabled: savedEstablishment.reminder_enabled, onlineBookingEnabled: savedEstablishment.online_booking_enabled }));
     } else if (supabase) {
       alert('Não foi possível identificar o estabelecimento. Saia e entre novamente.');
       return;
@@ -402,7 +570,7 @@ export default function App() {
   };
 
   const handleShopLogo = async (file) => {
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!validateImageFile(file)) return;
     if (supabase && establishmentId) {
       const extension = file.type.split('/')[1] || 'png';
       const path = `${establishmentId}/logo-${Date.now()}.${extension}`;
@@ -449,8 +617,15 @@ export default function App() {
       paymentMethod: adminBooking.paymentMethod,
       status: 'confirmado'
     };
-    await saveClientToCloud(newAppointment.clientName, newAppointment.clientPhone);
-    setAppointments(current => [...current, newAppointment]);
+    if (supabase && establishmentId) {
+      const { data: clientRow, error: clientError } = await supabase.from('clients').upsert({ establishment_id: establishmentId, name: newAppointment.clientName, phone: newAppointment.clientPhone }, { onConflict: 'establishment_id,phone' }).select('id').single();
+      if (clientError) { setAdminBookingError('Não foi possível salvar o cliente.'); return; }
+      const { error } = await supabase.from('appointments').insert({ establishment_id: establishmentId, client_id: clientRow.id, professional_id: newAppointment.barberId, service_id: newAppointment.serviceId, appointment_date: newAppointment.date, appointment_time: newAppointment.time, status: 'confirmado', payment_method: newAppointment.paymentMethod });
+      if (error) { setAdminBookingError(error.message); return; }
+      setAgendaVersion(version => version + 1);
+    } else {
+      setAppointments(current => [...current, newAppointment]);
+    }
     openWhatsAppMessage({ ...adminBooking, ...{
       clientName: adminBooking.clientName,
       clientPhone: adminBooking.clientPhone,
@@ -469,6 +644,10 @@ export default function App() {
   const handleAddBarber = (e) => {
     e.preventDefault();
     if (!newBarberName) return;
+    if (supabase) {
+      alert('O profissional precisa existir no Supabase Auth, com um profile ligado a este estabelecimento. Aqui dá para editar nome, comissão e desativar quem já entrou.');
+      return;
+    }
     const newBarber = {
       id: Date.now().toString(),
       name: newBarberName,
@@ -484,17 +663,34 @@ export default function App() {
   };
 
   const handleBarberPhoto = (file, onLoad) => {
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!validateImageFile(file)) return;
     const reader = new FileReader();
     reader.onload = () => onLoad(reader.result);
     reader.readAsDataURL(file);
   };
 
-  const handleUpdateBarber = (e) => {
+  const handleUpdateBarber = async (e) => {
     e.preventDefault();
-    setBarbers(barbers.map(b => b.id === editingBarber.id ? editingBarber : b));
+    if (supabase && establishmentId) {
+      const { error } = await supabase.from('profiles').update({ full_name: editingBarber.name, commission: Number(editingBarber.commission), photo_url: editingBarber.avatar }).eq('id', editingBarber.id).eq('establishment_id', establishmentId);
+      if (error) { alert('Não foi possível atualizar o profissional.'); return; }
+      setAgendaVersion(version => version + 1);
+    } else {
+      setBarbers(barbers.map(b => b.id === editingBarber.id ? editingBarber : b));
+    }
     setEditingBarber(null);
     flashAction('Barbeiro atualizado');
+  };
+
+  const handleDeactivateBarber = async (barberId) => {
+    if (!window.confirm('Desativar este profissional?')) return;
+    if (supabase && establishmentId) {
+      const { error } = await supabase.from('profiles').update({ active: false }).eq('id', barberId).eq('establishment_id', establishmentId);
+      if (error) { alert('Não foi possível desativar o profissional.'); return; }
+      setAgendaVersion(version => version + 1);
+      return;
+    }
+    setBarbers(barbers.filter(item => item.id !== barberId));
   };
 
   // Service Actions
@@ -542,7 +738,7 @@ export default function App() {
   };
 
   // Time Block Actions
-  const handleAddTimeBlock = (e) => {
+  const handleAddTimeBlock = async (e) => {
     e.preventDefault();
     const newBlock = {
       id: Date.now().toString(),
@@ -553,8 +749,24 @@ export default function App() {
       reason: blockReason,
       isRecurring: blockIsRecurring
     };
-    setTimeBlocks([...timeBlocks, newBlock]);
-    alert(blockIsRecurring ? 'Bloqueio diário/recorrente ativado!' : 'Bloqueio cadastrado!');
+    if (supabase && establishmentId) {
+      const { error } = await supabase.from('time_blocks').insert({ establishment_id: establishmentId, professional_id: blockBarberId, block_date: blockDate, start_time: blockStartTime, end_time: blockEndTime, reason: blockReason, is_recurring: blockIsRecurring });
+      if (error) { alert(`Não foi possível gravar o bloqueio: ${error.message}`); return; }
+      setAgendaVersion(version => version + 1);
+    } else {
+      setTimeBlocks([...timeBlocks, newBlock]);
+    }
+    flashAction(blockIsRecurring ? 'Bloqueio diário ativado' : 'Bloqueio cadastrado');
+  };
+
+  const handleRemoveTimeBlock = async (blockId) => {
+    if (supabase && establishmentId) {
+      const { error } = await supabase.from('time_blocks').delete().eq('id', blockId).eq('establishment_id', establishmentId);
+      if (error) { alert('Não foi possível remover o bloqueio.'); return; }
+      setAgendaVersion(version => version + 1);
+      return;
+    }
+    setTimeBlocks(timeBlocks.filter(item => item.id !== blockId));
   };
 
   // Active appointments calculations
@@ -587,9 +799,11 @@ export default function App() {
   }).filter(item => adminRole === 'admin' || item.barber.id === loggedBarberId);
 
   // Filter client appointments for lookup
-  const userAppointments = searchPhone.trim() 
-    ? appointments.filter(a => a.clientPhone.replace(/\D/g, '').includes(searchPhone.replace(/\D/g, '')))
-    : [];
+  const userAppointments = supabase
+    ? lookupResults
+    : (searchPhone.trim()
+      ? appointments.filter(a => a.clientPhone.replace(/\D/g, '').includes(searchPhone.replace(/\D/g, '')))
+      : []);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
@@ -602,7 +816,7 @@ export default function App() {
               {shopSettings.logo ? <img src={shopSettings.logo} alt="Logo" className="w-full h-full object-cover" /> : <Scissors className="w-6 h-6" />}
             </div>
             <div>
-              <h1 className="font-bold text-lg text-amber-500">{shopSettings.name}</h1>
+              <h1 className="font-bold text-lg text-amber-500">SeuHorario</h1>
               <p className="text-xs text-zinc-400">{shopSettings.businessType} • Gestão & Agendamento</p>
             </div>
           </div>
@@ -878,8 +1092,8 @@ export default function App() {
               </div>
               <form onSubmit={handleAdminLogin} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1">Usuário</label>
-                  <input type="text" required autoComplete="username" value={adminUsername} onChange={e => { setAdminUsername(e.target.value); setAdminLoginError(''); }} placeholder="Digite seu usuário" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500" />
+                  <label className="block text-xs font-semibold text-zinc-400 mb-1">E-mail</label>
+                  <input type="email" required autoComplete="username" value={adminUsername} onChange={e => { setAdminUsername(e.target.value); setAdminLoginError(''); }} placeholder="voce@barbearia.com" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-zinc-400 mb-1">Senha</label>
@@ -1242,7 +1456,7 @@ export default function App() {
                             <Edit3 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => setBarbers(barbers.filter(item => item.id !== b.id))}
+                            onClick={() => handleDeactivateBarber(b.id)}
                             className="text-red-400 hover:text-red-300 p-2"
                             title="Excluir Barbeiro"
                           >
@@ -1390,6 +1604,7 @@ export default function App() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4"><h3 className="font-bold text-white">Identidade do estabelecimento</h3>
                     <label className="block text-xs font-semibold text-zinc-400">Nome do estabelecimento<input value={shopSettings.name} onChange={e => handleSettingsChange('name', e.target.value)} className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm" /></label>
+                    <label className="block text-xs font-semibold text-zinc-400">Link personalizado da página<div className="flex items-center mt-1"><span className="bg-zinc-800 border border-r-0 border-zinc-700 rounded-l-lg px-3 py-2.5 text-xs text-zinc-500">/</span><input value={shopSettings.slug} onChange={e => handleSettingsChange('slug', e.target.value)} placeholder="nome-da-barbearia" className="w-full bg-zinc-800 border border-zinc-700 rounded-r-lg p-2.5 text-white text-sm" /></div><span className="block text-xs text-zinc-500 mt-1">Use apenas letras, números e hífen.</span></label>
                     <label className="block text-xs font-semibold text-zinc-400">Tipo de negócio<select value={shopSettings.businessType} onChange={e => handleSettingsChange('businessType', e.target.value)} className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm"><option>Barbearia</option><option>Salão de beleza</option><option>Espaço de beleza</option><option>Estúdio de estética</option><option>Outro</option></select></label>
                     <label className="block text-xs font-semibold text-zinc-400">Logo do estabelecimento<div className="flex items-center gap-3 mt-1">{shopSettings.logo ? <img src={shopSettings.logo} alt="Prévia da logo" className="w-16 h-16 rounded-xl object-cover border border-zinc-700" /> : <div className="w-16 h-16 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-500">Sem logo</div>}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => handleShopLogo(e.target.files?.[0])} className="w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-700 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white" /></div></label>
                     <label className="block text-xs font-semibold text-zinc-400">Descrição pública<textarea value={shopSettings.description} onChange={e => handleSettingsChange('description', e.target.value)} placeholder="Apresente seu estabelecimento aos clientes" rows="3" className="w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm resize-none" /></label>
@@ -1520,7 +1735,7 @@ export default function App() {
                             </p>
                           </div>
                           <button
-                            onClick={() => setTimeBlocks(timeBlocks.filter(item => item.id !== blk.id))}
+                            onClick={() => handleRemoveTimeBlock(blk.id)}
                             className="text-red-400 hover:text-red-300 p-2"
                             title="Remover Bloqueio"
                           >
@@ -1547,7 +1762,7 @@ export default function App() {
                 <p className="text-sm text-zinc-400 mt-1">Acesso exclusivo do administrador do sistema.</p>
               </div>
               <form onSubmit={handlePlatformLogin} className="space-y-4">
-                <input type="text" required value={platformUsername} onChange={e => { setPlatformUsername(e.target.value); setPlatformLoginError(''); }} placeholder="Usuário master" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500" />
+                <input type="email" required value={platformUsername} onChange={e => { setPlatformUsername(e.target.value); setPlatformLoginError(''); }} placeholder="E-mail do administrador" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500" />
                 <input type="password" required value={platformPassword} onChange={e => { setPlatformPassword(e.target.value); setPlatformLoginError(''); }} placeholder="Senha" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500" />
                 {platformLoginError && <p className="text-sm text-red-400 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{platformLoginError}</p>}
                 <button type="submit" className="w-full bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold py-3 rounded-lg transition">Entrar na plataforma</button>
@@ -1577,7 +1792,7 @@ export default function App() {
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
                 <h3 className="text-lg font-bold text-white mb-4">Barbearias clientes</h3>
                 <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-zinc-800 text-zinc-400 text-xs uppercase"><tr><th className="py-3 px-4">Barbearia</th><th className="py-3 px-4">Responsável</th><th className="py-3 px-4">Plano</th><th className="py-3 px-4">Pagamento</th><th className="py-3 px-4">Status</th><th className="py-3 px-4 text-right">Ação</th></tr></thead>
-                  <tbody className="divide-y divide-zinc-800">{barbershops.map(shop => <tr key={shop.id} className="hover:bg-zinc-800/30"><td className="py-4 px-4 font-semibold text-white">{shop.name}<span className="block text-xs text-zinc-500 mt-1">Próximo vencimento: {shop.nextPayment}</span></td><td className="py-4 px-4 text-zinc-300">{shop.owner}</td><td className="py-4 px-4 text-zinc-300">{shop.plan}</td><td className={`py-4 px-4 ${shop.payment === 'Em dia' ? 'text-emerald-400' : 'text-red-400'}`}>{shop.payment}</td><td className="py-4 px-4"><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${shop.status === 'ativo' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>{shop.status.toUpperCase()}</span></td><td className="py-4 px-4 text-right"><button onClick={() => toggleBarbershopAccess(shop.id)} className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 ml-auto ${shop.status === 'ativo' ? 'text-red-400 bg-red-500/10 hover:bg-red-500/20' : 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'}`}><Power className="w-3.5 h-3.5" />{shop.status === 'ativo' ? 'Suspender' : 'Reativar'}</button></td></tr>)}</tbody>
+                  <tbody className="divide-y divide-zinc-800">{platformDataLoading ? <tr><td colSpan="6" className="py-10 text-center text-zinc-500">Carregando estabelecimentos...</td></tr> : barbershops.length === 0 ? <tr><td colSpan="6" className="py-10 text-center text-zinc-500">Nenhum estabelecimento cadastrado no banco.</td></tr> : barbershops.map(shop => <tr key={shop.id} className="hover:bg-zinc-800/30"><td className="py-4 px-4 font-semibold text-white">{shop.name}<span className="block text-xs text-zinc-500 mt-1">/{shop.slug || 'sem-link-configurado'}</span></td><td className="py-4 px-4 text-zinc-300">{shop.owner}</td><td className="py-4 px-4 text-zinc-300">{shop.plan}</td><td className="py-4 px-4 text-zinc-500">{shop.payment}</td><td className="py-4 px-4"><span className="text-[10px] px-2 py-1 rounded-full font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">ATIVO</span></td><td className="py-4 px-4 text-right"><button onClick={() => toggleBarbershopAccess(shop.id)} className="px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 ml-auto text-red-400 bg-red-500/10 hover:bg-red-500/20"><Power className="w-3.5 h-3.5" />Suspender</button></td></tr>)}</tbody>
                 </table></div>
               </div>
             </div>
