@@ -40,3 +40,4 @@ export const openWhatsAppMessage = (appointment, type, shopSettings = {}, barber
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 };
+

@@ -5,7 +5,14 @@ import {
 } from 'lucide-react';
 import { useEstablishment } from '../../contexts/EstablishmentContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { getTodayISO, defaultTimeSlots, isSlotUnavailable } from '../../utils/dateUtils';
+import {
+  getTodayISO,
+  getDayConfig,
+  isDayOpen,
+  getTimeSlotsForDate,
+  defaultTimeSlots,
+  isSlotUnavailable
+} from '../../utils/dateUtils';
 import { openWhatsAppMessage } from '../../utils/whatsappUtils';
 
 export default function OverviewSection() {
@@ -14,6 +21,7 @@ export default function OverviewSection() {
     services,
     appointments,
     timeBlocks,
+    operatingHours,
     adminCreateAppointment,
     cancelAppointment,
     shopSettings
@@ -54,8 +62,8 @@ export default function OverviewSection() {
     const serviceObj = services.find(s => s.id === adminBooking.serviceId);
     const duration = serviceObj?.duration || 30;
 
-    if (isSlotUnavailable(adminBooking.barberId, adminBooking.date, adminBooking.time, duration, timeBlocks, appointments)) {
-      setBookingError('Este horário está indisponível para o barbeiro ou conflita com outro agendamento.');
+    if (isSlotUnavailable(adminBooking.barberId, adminBooking.date, adminBooking.time, duration, timeBlocks, appointments, operatingHours)) {
+      setBookingError('Este horário está indisponível para o barbeiro ou conflita com outro agendamento/horário de fechamento.');
       return;
     }
 
@@ -198,18 +206,34 @@ export default function OverviewSection() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-400 mb-1">Horário</label>
+              {!isDayOpen(adminBooking.date, operatingHours) && (
+                <span className="text-[10px] text-amber-500 block mb-1">
+                  (Atenção: Barbearia fechada neste dia da semana)
+                </span>
+              )}
               <select
                 value={adminBooking.time}
                 onChange={e => handleBookingChange('time', e.target.value)}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
               >
-                {defaultTimeSlots.map(time => {
+                {(getTimeSlotsForDate(adminBooking.date, operatingHours, 30).length > 0
+                  ? getTimeSlotsForDate(adminBooking.date, operatingHours, 30)
+                  : defaultTimeSlots
+                ).map(time => {
                   const sObj = services.find(s => s.id === adminBooking.serviceId);
                   const dur = sObj?.duration || 30;
-                  const unavailable = isSlotUnavailable(adminBooking.barberId, adminBooking.date, time, dur, timeBlocks, appointments);
+                  const unavailable = isSlotUnavailable(
+                    adminBooking.barberId,
+                    adminBooking.date,
+                    time,
+                    dur,
+                    timeBlocks,
+                    appointments,
+                    operatingHours
+                  );
                   return (
                     <option key={time} value={time} disabled={unavailable}>
-                      {time}{unavailable ? ' (ocupado)' : ''}
+                      {time}{unavailable ? ' (indisponível)' : ''}
                     </option>
                   );
                 })}
@@ -346,3 +370,4 @@ export default function OverviewSection() {
     </div>
   );
 }
+

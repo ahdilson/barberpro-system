@@ -4,13 +4,20 @@ import {
   AlertCircle, Search, Ban, MessageCircle, Instagram, MapPin
 } from 'lucide-react';
 import { useEstablishment } from '../../contexts/EstablishmentContext';
-import { getTodayISO, defaultTimeSlots, isSlotUnavailable } from '../../utils/dateUtils';
+import {
+  getTodayISO,
+  getDayConfig,
+  isDayOpen,
+  getTimeSlotsForDate,
+  isSlotUnavailable
+} from '../../utils/dateUtils';
 import { formatPhone, cleanPhone } from '../../utils/phoneUtils';
 import { openWhatsAppMessage } from '../../utils/whatsappUtils';
 
 export default function ClientBookingView() {
   const {
     shopSettings,
+    operatingHours,
     barbers,
     services,
     appointments,
@@ -90,7 +97,13 @@ export default function ClientBookingView() {
     const currentService = services.find(s => s.id === selectedService);
     const duration = currentService?.duration || 30;
 
-    if (isSlotUnavailable(selectedBarber, bookingDate, bookingTime, duration, timeBlocks, appointments)) {
+    const dayConfig = getDayConfig(bookingDate, operatingHours);
+    if (!isDayOpen(bookingDate, operatingHours)) {
+      setBookingError(`A barbearia está fechada às ${dayConfig?.name || 'nesta data'}. Por favor, escolha outro dia.`);
+      return;
+    }
+
+    if (isSlotUnavailable(selectedBarber, bookingDate, bookingTime, duration, timeBlocks, appointments, operatingHours)) {
       setBookingError('Este horário não está mais disponível. Por favor, escolha outro.');
       return;
     }
@@ -341,6 +354,7 @@ export default function ClientBookingView() {
                   const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                   const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
                   const isSelected = bookingDate === iso;
+                  const dayIsOpen = isDayOpen(iso, operatingHours);
                   const label = offset === 0 ? 'Hoje' : offset === 1 ? 'Amanhã' : `${weekdays[d.getDay()]}, ${d.getDate()}`;
 
                   return (
@@ -348,13 +362,18 @@ export default function ClientBookingView() {
                       type="button"
                       key={iso}
                       onClick={() => { setBookingDate(iso); setBookingError(''); }}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition border ${
+                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition border text-center ${
                         isSelected
                           ? 'bg-amber-500 text-zinc-950 border-amber-500 font-bold shadow-md shadow-amber-500/10'
-                          : 'bg-zinc-800/80 text-zinc-300 border-zinc-700/60 hover:bg-zinc-700'
+                          : dayIsOpen
+                          ? 'bg-zinc-800/80 text-zinc-300 border-zinc-700/60 hover:bg-zinc-700'
+                          : 'bg-zinc-900/60 text-zinc-500 border-zinc-800/80 hover:bg-zinc-800'
                       }`}
                     >
-                      {label}
+                      <span>{label}</span>
+                      {!dayIsOpen && (
+                        <span className="block text-[9px] text-zinc-500 font-normal">Fechado</span>
+                      )}
                     </button>
                   );
                 })}
@@ -372,45 +391,63 @@ export default function ClientBookingView() {
                     onChange={(e) => { setBookingDate(e.target.value); setBookingError(''); }}
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-amber-500"
                   />
+                  {!isDayOpen(bookingDate, operatingHours) && (
+                    <p className="text-xs text-red-400 mt-1.5">
+                      A barbearia não abre às {getDayConfig(bookingDate, operatingHours)?.name || 'nesta data'}.
+                    </p>
+                  )}
                 </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-                  Horários Disponíveis ({currentDuration} min)
-                </label>
-                <div className="grid grid-cols-4 gap-1.5 max-h-44 overflow-y-auto p-2 bg-zinc-950 rounded-xl border border-zinc-800">
-                  {defaultTimeSlots.map((time) => {
-                    const unavailable = isSlotUnavailable(
-                      selectedBarber,
-                      bookingDate,
-                      time,
-                      currentDuration,
-                      timeBlocks,
-                      appointments
-                    );
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                    Horários Disponíveis ({currentDuration} min)
+                  </label>
+                  {!isDayOpen(bookingDate, operatingHours) ? (
+                    <div className="p-4 bg-zinc-950 rounded-xl border border-zinc-800 text-center py-7">
+                      <p className="text-amber-500 font-semibold text-sm">Barbearia Fechada</p>
+                      <p className="text-zinc-400 text-xs mt-1">
+                        Não há expediente às {getDayConfig(bookingDate, operatingHours)?.name || 'nesta data'}.
+                      </p>
+                      <p className="text-zinc-500 text-[11px] mt-1">
+                        Por favor, selecione outro dia no calendário ao lado.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-4 gap-1.5 max-h-44 overflow-y-auto p-2 bg-zinc-950 rounded-xl border border-zinc-800">
+                      {getTimeSlotsForDate(bookingDate, operatingHours, 30).map((time) => {
+                        const unavailable = isSlotUnavailable(
+                          selectedBarber,
+                          bookingDate,
+                          time,
+                          currentDuration,
+                          timeBlocks,
+                          appointments,
+                          operatingHours
+                        );
 
-                    return (
-                      <button
-                        type="button"
-                        key={time}
-                        disabled={unavailable}
-                        onClick={() => { setBookingTime(time); setBookingError(''); }}
-                        className={`py-2 text-xs rounded-lg font-medium transition ${
-                          bookingTime === time && !unavailable
-                            ? 'bg-amber-500 text-zinc-950 font-bold shadow-sm'
-                            : unavailable
-                            ? 'bg-zinc-900/60 text-zinc-600 border border-zinc-900 cursor-not-allowed line-through'
-                            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                        }`}
-                      >
-                        {time}
-                      </button>
-                    );
-                  })}
+                        return (
+                          <button
+                            type="button"
+                            key={time}
+                            disabled={unavailable}
+                            onClick={() => { setBookingTime(time); setBookingError(''); }}
+                            className={`py-2 text-xs rounded-lg font-medium transition ${
+                              bookingTime === time && !unavailable
+                                ? 'bg-amber-500 text-zinc-950 font-bold shadow-sm'
+                                : unavailable
+                                ? 'bg-zinc-900/60 text-zinc-600 border border-zinc-900 cursor-not-allowed line-through'
+                                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                            }`}
+                          >
+                            {time}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-          </div>
 
             {/* 4. Dados do Cliente */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-zinc-800 pt-5">

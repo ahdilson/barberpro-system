@@ -34,13 +34,53 @@ export const formatDateLabel = (isoDate) => {
   const d = new Date(`${isoDate}T12:00:00`);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowISO = getTodayISO();
-  
+  const tomorrowISO = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+  if (isoDate === tomorrowISO) return 'Amanhã';
+
   const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const dayName = weekdays[d.getDay()];
   const dayNum = String(d.getDate()).padStart(2, '0');
   const monthNum = String(d.getMonth() + 1).padStart(2, '0');
   return `${dayName}, ${dayNum}/${monthNum}`;
+};
+
+export const DEFAULT_OPERATING_HOURS = [
+  { day: 0, name: 'Domingo', isOpen: false, openTime: '09:00', closeTime: '14:00' },
+  { day: 1, name: 'Segunda-feira', isOpen: false, openTime: '09:00', closeTime: '19:00' },
+  { day: 2, name: 'Terça-feira', isOpen: true, openTime: '09:00', closeTime: '19:00' },
+  { day: 3, name: 'Quarta-feira', isOpen: true, openTime: '09:00', closeTime: '19:00' },
+  { day: 4, name: 'Quinta-feira', isOpen: true, openTime: '09:00', closeTime: '19:00' },
+  { day: 5, name: 'Sexta-feira', isOpen: true, openTime: '09:00', closeTime: '20:00' },
+  { day: 6, name: 'Sábado', isOpen: true, openTime: '08:00', closeTime: '18:00' }
+];
+
+export const getDayConfig = (dateISO, operatingHours = DEFAULT_OPERATING_HOURS) => {
+  if (!dateISO) return null;
+  const d = new Date(`${dateISO}T12:00:00`);
+  const dayOfWeek = d.getDay();
+  const list = Array.isArray(operatingHours) && operatingHours.length > 0 ? operatingHours : DEFAULT_OPERATING_HOURS;
+  return list.find(item => item.day === dayOfWeek) || list[dayOfWeek] || null;
+};
+
+export const isDayOpen = (dateISO, operatingHours = DEFAULT_OPERATING_HOURS) => {
+  const config = getDayConfig(dateISO, operatingHours);
+  return config ? Boolean(config.isOpen) : true;
+};
+
+export const getTimeSlotsForDate = (dateISO, operatingHours = DEFAULT_OPERATING_HOURS, stepMinutes = 30) => {
+  if (!dateISO) return [];
+  const config = getDayConfig(dateISO, operatingHours);
+  if (!config || !config.isOpen) return [];
+
+  const openMins = timeToMinutes(config.openTime || '09:00');
+  const closeMins = timeToMinutes(config.closeTime || '19:00');
+  const slots = [];
+
+  for (let mins = openMins; mins < closeMins; mins += stepMinutes) {
+    slots.push(minutesToTime(mins));
+  }
+
+  return slots;
 };
 
 export const isIntervalBlocked = (barberId, date, startMins, endMins, timeBlocks = []) => {
@@ -67,12 +107,26 @@ export const isIntervalBooked = (barberId, date, startMins, endMins, appointment
   });
 };
 
-export const isSlotUnavailable = (barberId, date, slotTime, duration = 30, timeBlocks = [], appointments = []) => {
+export const isSlotUnavailable = (
+  barberId,
+  date,
+  slotTime,
+  duration = 30,
+  timeBlocks = [],
+  appointments = [],
+  operatingHours = DEFAULT_OPERATING_HOURS
+) => {
+  const config = getDayConfig(date, operatingHours);
+  
+  // If barbershop is closed on this day of week
+  if (config && !config.isOpen) return true;
+
   const startMins = timeToMinutes(slotTime);
   const endMins = startMins + duration;
+  const dayCloseMins = config ? timeToMinutes(config.closeTime || '19:00') : timeToMinutes('20:00');
 
-  // Maximum working hour cutoff: 19:30
-  if (endMins > timeToMinutes('19:30')) return true;
+  // Service cannot end after the establishment closes on that day
+  if (endMins > dayCloseMins) return true;
 
   // If date is today, block past time slots (with 10-minute buffer)
   if (date === getTodayISO()) {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   TrendingUp, User, Scissors, CalendarX, Settings,
-  Shield, LogOut, Key, AlertCircle, DollarSign
+  Shield, LogOut, Key, AlertCircle, DollarSign, Clock
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import OverviewSection from './OverviewSection';
@@ -9,6 +9,7 @@ import FinancialSection from './FinancialSection';
 import BarbersSection from './BarbersSection';
 import ServicesSection from './ServicesSection';
 import TimeBlocksSection from './TimeBlocksSection';
+import OperatingHoursSection from './OperatingHoursSection';
 import SettingsSection from './SettingsSection';
 
 export default function AdminDashboard() {
@@ -245,6 +246,17 @@ export default function AdminDashboard() {
             </button>
 
             <button
+              onClick={() => setActiveSection('hours')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
+                activeSection === 'hours'
+                  ? 'bg-zinc-800 text-amber-500 border border-zinc-700 font-bold'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Clock className="w-4 h-4" /> Horários de Funcionamento
+            </button>
+
+            <button
               onClick={() => setActiveSection('blocks')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
                 activeSection === 'blocks'
@@ -274,8 +286,10 @@ export default function AdminDashboard() {
       {activeSection === 'financial' && <FinancialSection />}
       {activeSection === 'barbers' && adminRole === 'admin' && <BarbersSection />}
       {activeSection === 'services' && adminRole === 'admin' && <ServicesSection />}
+      {activeSection === 'hours' && adminRole === 'admin' && <OperatingHoursSection />}
       {activeSection === 'blocks' && adminRole === 'admin' && <TimeBlocksSection />}
       {activeSection === 'settings' && adminRole === 'admin' && <SettingsSection />}
     </div>
   );
 }
+

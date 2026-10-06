@@ -21,7 +21,16 @@ const DEFAULT_SETTINGS = {
   reminderMessage: 'Olá, {cliente}! Lembrete: seu horário é amanhã às {horario} com {barbeiro}.',
   reminderMinutes: 1440,
   reminderEnabled: true,
-  onlineBookingEnabled: true
+  onlineBookingEnabled: true,
+  operatingHours: [
+    { day: 0, name: 'Domingo', isOpen: false, openTime: '09:00', closeTime: '14:00' },
+    { day: 1, name: 'Segunda-feira', isOpen: false, openTime: '09:00', closeTime: '19:00' },
+    { day: 2, name: 'Terça-feira', isOpen: true, openTime: '09:00', closeTime: '19:00' },
+    { day: 3, name: 'Quarta-feira', isOpen: true, openTime: '09:00', closeTime: '19:00' },
+    { day: 4, name: 'Quinta-feira', isOpen: true, openTime: '09:00', closeTime: '19:00' },
+    { day: 5, name: 'Sexta-feira', isOpen: true, openTime: '09:00', closeTime: '20:00' },
+    { day: 6, name: 'Sábado', isOpen: true, openTime: '08:00', closeTime: '18:00' }
+  ]
 };
 
 const mapBusy = (row) => ({
@@ -171,7 +180,8 @@ export function EstablishmentProvider({ children, slug = null }) {
           reminderMessage: establishment.reminder_message || '',
           reminderMinutes: establishment.reminder_minutes || 60,
           reminderEnabled: establishment.reminder_enabled ?? true,
-          onlineBookingEnabled: establishment.online_booking_enabled ?? true
+          onlineBookingEnabled: establishment.online_booking_enabled ?? true,
+          operatingHours: establishment.operating_hours || DEFAULT_SETTINGS.operatingHours
         });
       }
 
@@ -445,6 +455,7 @@ export function EstablishmentProvider({ children, slug = null }) {
         reminder_minutes: newSettings.reminderMinutes,
         reminder_enabled: newSettings.reminderEnabled,
         online_booking_enabled: newSettings.onlineBookingEnabled,
+        operating_hours: newSettings.operatingHours || shopSettings.operatingHours,
         updated_at: new Date().toISOString()
       }).eq('id', establishmentId);
 
@@ -453,12 +464,18 @@ export function EstablishmentProvider({ children, slug = null }) {
     return { success: true };
   };
 
+  const updateOperatingHours = async (newHours) => {
+    return updateSettings({ operatingHours: newHours });
+  };
+
   return (
     <EstablishmentContext.Provider
       value={{
         establishmentId,
         establishmentLoading,
         shopSettings,
+        operatingHours: shopSettings.operatingHours || DEFAULT_SETTINGS.operatingHours,
+        updateOperatingHours,
         barbers,
         services,
         appointments,
@@ -488,3 +505,4 @@ export function useEstablishment() {
   }
   return context;
 }
+

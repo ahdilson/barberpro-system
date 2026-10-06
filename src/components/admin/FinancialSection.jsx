@@ -189,3 +189,4 @@ export default function FinancialSection() {
     </div>
   );
 }
+
