@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Calendar, Clock, Scissors, User, CheckCircle2,
-  AlertCircle, Search, Ban, MessageCircle, Instagram, MapPin
+  AlertCircle, Search, Ban, MessageCircle, Instagram, MapPin, Award
 } from 'lucide-react';
 import { useEstablishment } from '../../contexts/EstablishmentContext';
 import {
@@ -13,6 +13,7 @@ import {
 } from '../../utils/dateUtils';
 import { formatPhone, cleanPhone } from '../../utils/phoneUtils';
 import { openWhatsAppMessage } from '../../utils/whatsappUtils';
+import DigitalLoyaltyCard from '../loyalty/DigitalLoyaltyCard';
 
 export default function ClientBookingView() {
   const {
@@ -24,7 +25,8 @@ export default function ClientBookingView() {
     timeBlocks,
     bookAppointment,
     cancelAppointment,
-    lookupMyAppointments
+    lookupMyAppointments,
+    getClientLoyalty
   } = useEstablishment();
 
   const today = getTodayISO();

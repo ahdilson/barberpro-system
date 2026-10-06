@@ -9,3 +9,4 @@ add column if not exists operating_hours jsonb default '[
   {"day": 5, "name": "Sexta-feira", "isOpen": true, "openTime": "09:00", "closeTime": "20:00"},
   {"day": 6, "name": "Sábado", "isOpen": true, "openTime": "08:00", "closeTime": "18:00"}
 ]'::jsonb;
+

@@ -22,6 +22,9 @@ const DEFAULT_SETTINGS = {
   reminderMinutes: 1440,
   reminderEnabled: true,
   onlineBookingEnabled: true,
+  loyaltyEnabled: true,
+  loyaltyTarget: 10,
+  loyaltyReward: '1 Corte de Cabelo Grátis',
   operatingHours: [
     { day: 0, name: 'Domingo', isOpen: false, openTime: '09:00', closeTime: '14:00' },
     { day: 1, name: 'Segunda-feira', isOpen: false, openTime: '09:00', closeTime: '19:00' },
@@ -181,6 +184,9 @@ export function EstablishmentProvider({ children, slug = null }) {
           reminderMinutes: establishment.reminder_minutes || 60,
           reminderEnabled: establishment.reminder_enabled ?? true,
           onlineBookingEnabled: establishment.online_booking_enabled ?? true,
+          loyaltyEnabled: establishment.loyalty_enabled ?? true,
+          loyaltyTarget: establishment.loyalty_target ?? 10,
+          loyaltyReward: establishment.loyalty_reward || '1 Corte de Cabelo Grátis',
           operatingHours: establishment.operating_hours || DEFAULT_SETTINGS.operatingHours
         });
       }
@@ -456,6 +462,9 @@ export function EstablishmentProvider({ children, slug = null }) {
         reminder_enabled: newSettings.reminderEnabled,
         online_booking_enabled: newSettings.onlineBookingEnabled,
         operating_hours: newSettings.operatingHours || shopSettings.operatingHours,
+        loyalty_enabled: newSettings.loyaltyEnabled ?? shopSettings.loyaltyEnabled,
+        loyalty_target: newSettings.loyaltyTarget ?? shopSettings.loyaltyTarget,
+        loyalty_reward: newSettings.loyaltyReward || shopSettings.loyaltyReward,
         updated_at: new Date().toISOString()
       }).eq('id', establishmentId);
 
@@ -468,6 +477,65 @@ export function EstablishmentProvider({ children, slug = null }) {
     return updateSettings({ operatingHours: newHours });
   };
 
+  const completeAppointment = async (appointmentId) => {
+    if (supabase && establishmentId && establishmentId !== 'demo-shop') {
+      const { error } = await supabase.rpc('complete_appointment', {
+        p_establishment: establishmentId,
+        p_appointment: appointmentId
+      });
+      if (error) {
+        await supabase.from('appointments').update({ status: 'concluido' }).eq('id', appointmentId);
+      }
+      refreshAgenda();
+      return { success: true };
+    }
+    setAppointments(prev => prev.map(a => a.id === appointmentId ? { ...a, status: 'concluido' } : a));
+    refreshAgenda();
+    return { success: true };
+  };
+
+  const getClientLoyalty = async (phone) => {
+    if (!phone || phone.replace(/\D/g, '').length < 8) return null;
+    if (supabase && establishmentId && establishmentId !== 'demo-shop') {
+      const { data, error } = await supabase.rpc('get_client_loyalty', {
+        p_establishment: establishmentId,
+        p_phone: phone
+      });
+      if (!error && data && data.length > 0) {
+        return data[0];
+      }
+    }
+    const clean = phone.replace(/\D/g, '');
+    const clientApps = appointments.filter(a => a.clientPhone.replace(/\D/g, '').includes(clean));
+    const completed = clientApps.filter(a => a.status === 'concluido').length;
+    const target = shopSettings.loyaltyTarget || 10;
+    return {
+      client_id: 'demo-client',
+      client_name: clientApps[0]?.clientName || 'Cliente',
+      client_phone: phone,
+      loyalty_points: completed % target,
+      rewards_redeemed: Math.floor(completed / target),
+      completed_cuts: completed
+    };
+  };
+
+  const redeemClientReward = async (clientId) => {
+    if (supabase && establishmentId && establishmentId !== 'demo-shop') {
+      const { error } = await supabase.rpc('redeem_client_reward', {
+        p_establishment: establishmentId,
+        p_client: clientId
+      });
+      if (error) return { success: false, error: error.message };
+      refreshAgenda();
+      return { success: true };
+    }
+    return { success: true };
+  };
+
+  const updateLoyaltySettings = async (loyaltyConfig) => {
+    return updateSettings(loyaltyConfig);
+  };
+
   return (
     <EstablishmentContext.Provider
       value={{
@@ -476,6 +544,10 @@ export function EstablishmentProvider({ children, slug = null }) {
         shopSettings,
         operatingHours: shopSettings.operatingHours || DEFAULT_SETTINGS.operatingHours,
         updateOperatingHours,
+        completeAppointment,
+        getClientLoyalty,
+        redeemClientReward,
+        updateLoyaltySettings,
         barbers,
         services,
         appointments,
